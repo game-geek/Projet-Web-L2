@@ -1,0 +1,29 @@
+{ "columns":1,
+ "image":"..\/..\/..\/..\/Assets\/natural tiles\/pixelized\/natural-tile9v2.png",
+ "imageheight":32,
+ "imagewidth":32,
+ "margin":0,
+ "name":"naturaltilseset1",
+ "spacing":0,
+ "tilecount":1,
+ "tiledversion":"1.8.2",
+ "tileheight":32,
+ "tiles":[
+        {
+         "id":0,
+         "properties":[
+                {
+                 "name":"name",
+                 "type":"string",
+                 "value":"natural_wall"
+                }, 
+                {
+                 "name":"variant",
+                 "type":"string",
+                 "value":"1"
+                }]
+        }],
+ "tilewidth":32,
+ "type":"tileset",
+ "version":"1.8"
+}
