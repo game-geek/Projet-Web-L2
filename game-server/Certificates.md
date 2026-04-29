@@ -26,7 +26,7 @@ To remove it:
 certutil -d sql:$HOME/.pki/nssdb -D -n "Dev Root CA"
 ```
 
-Make sure the cert is trusted in brave at this page: _brave://settings/certificates_
+Make sure the cert is trusted in brave at this page: _brave://settings/certificates_ <br>
 Make sure also that the experimental WebTransport/QUIC-related related flag is enabled: _brave://flags_
 
 ### Info on the certs
