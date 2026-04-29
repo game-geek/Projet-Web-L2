@@ -49,3 +49,79 @@ After that, we install the root CA certificate into our system or browser trust 
 So the simplified dev setup is:
 
 dev-root-ca cert -> dev-server cert
+
+### Creating Dev Certs (with openssl)
+
+A certificate is obtained when a Certificate Authority (CA) issues a certificate for an entity after receiving and validating a request for it. The public key is inside the certificate itself.
+
+For a local development setup, we usually do this:
+
+1. Generate a local root CA private key.
+
+```bash
+openssl genrsa -out dev-root-ca.key 2048
+```
+
+2. Generate a self-signed root CA certificate from that private key.
+
+```bash
+openssl req -x509 -new -nodes \
+  -key dev-root-ca.key \
+  -sha256 -days 3650 \
+  -out dev-root-ca.crt \
+  -subj "/CN=Dev Root CA"
+```
+
+3. Generate a server private key.
+
+```bash
+openssl genrsa -out dev-server.key 2048
+```
+
+4. Generate a CSR for the server, which contains the server’s public key and identity information such as the hostname/IP.
+
+Create this file: _dev-server.cnf_
+
+```text
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = localhost
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+IP.1 = 127.0.0.1
+IP.2 = ::1
+```
+
+Then create the CSR:
+
+```bash
+openssl req -new \
+  -key dev-server.key \
+  -out dev-server.csr \
+  -config dev-server.cnf
+```
+
+5. Send the CSR to the local CA (The local CA signs the server CSR and produces the server certificate).
+
+```bash
+openssl x509 -req \
+  -in dev-server.csr \
+  -CA dev-root-ca.crt \
+  -CAkey dev-root-ca.key \
+  -CAcreateserial \
+  -out dev-server.crt \
+  -days 825 \
+  -sha256 \
+  -extfile dev-server.cnf \
+  -extensions v3_req
+```
+
+(6. Install the root CA certificate into the system/browser trust store.)
