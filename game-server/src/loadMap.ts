@@ -1,12 +1,12 @@
 import { Tuple } from "elysia/dist/types";
 import {
   createBuilding,
-  BuildingVariantsMap,
   BuildingKind,
   BuildingVariantMap,
   MapBuildings,
 } from "./buildings/buildings";
 import * as z from "zod";
+import { BuildingVariantsMap } from "./buildings/globals";
 
 // A Tiled Map has multiple layers and multiple tilesets
 // At the moment the code ONLY loads the first layer
@@ -176,13 +176,11 @@ export async function loadMap(mapPath: string, tilesetPaths: string[]) {
 
   for (const tile of tiles) {
     if (tile in tileBindings) {
-      let res = serverBuildingsMap.addBuilding(
-        createBuilding(
-          tileBindings[tile].name,
-          tileBindings[tile].variant,
-          x,
-          y,
-        ),
+      let res = serverBuildingsMap.createAndAddBuilding(
+        tileBindings[tile].name,
+        tileBindings[tile].variant,
+        x,
+        y,
       );
       if (res) console.error("Error while trying to parse prebuilt map: ", res);
     }
@@ -194,4 +192,6 @@ export async function loadMap(mapPath: string, tilesetPaths: string[]) {
 
   // For debug purposes display the in-memory map
   serverBuildingsMap._displayDebugMap();
+
+  return serverBuildingsMap;
 }
