@@ -1,7 +1,9 @@
-import { webT } from "../main";
-import { saveGameServerURL } from "./serverCommunication";
+import { saveGameServerURL, start } from "./main";
 
 // HTML UI to connect to backend game server via URL
+const connectionSection = document.getElementById(
+  "prestart",
+) as HTMLScriptElement;
 const connectionForm = document.getElementById("connection") as HTMLFormElement;
 
 connectionForm.addEventListener("submit", (e) => {
@@ -12,5 +14,12 @@ connectionForm.addEventListener("submit", (e) => {
   const gameServerURL: string = form.get("game-server-url");
 
   saveGameServerURL(gameServerURL);
-  webT.connectToGameServer(gameServerURL);
+  start(gameServerURL);
 });
+
+export function closeConnectionUI() {
+  connectionSection.classList.add("hidden");
+}
+export function openConnectionUI() {
+  connectionSection.classList.remove("hidden");
+}
