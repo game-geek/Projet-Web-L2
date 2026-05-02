@@ -15,21 +15,18 @@ document.addEventListener("DOMContentLoaded", () => {
 export async function start(gameServerURl: string) {
   try {
     await SERVER.initConnection(gameServerURl);
+    closeConnectionUI();
+    GAME = StartGame("game-container");
   } catch (err) {
-    return console.error(
-      `Could not connect to game with url '${gameServerURl}`,
-    );
+    console.error(`Could not connect to game with url '${gameServerURl}`);
+    openConnectionUI();
   }
-
-  GAME = StartGame("game-container");
 }
 
 function attemptAutoConnect() {
   const savedURL = getGameServerURl();
   console.log(savedURL);
   if (!savedURL) return openConnectionUI();
-
-  closeConnectionUI();
 
   start(savedURL);
 }

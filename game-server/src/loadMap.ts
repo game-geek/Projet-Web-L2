@@ -167,7 +167,7 @@ export async function loadMap(mapPath: string, tilesetPaths: string[]) {
       });
   });
 
-  // Create and populate the server authoritative global buildings in the map
+  //populate the server authoritative global buildings in the map
 
   const serverBuildingsMap = new MapBuildings(map.width, map.height);
   let x = 0;
@@ -181,6 +181,7 @@ export async function loadMap(mapPath: string, tilesetPaths: string[]) {
         tileBindings[tile].variant,
         x,
         y,
+        i,
       );
       if (res) console.error("Error while trying to parse prebuilt map: ", res);
     }

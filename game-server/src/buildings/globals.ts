@@ -3,7 +3,7 @@ import {
   BuildingDef,
   BuildingKind,
   BuildingSnapshot,
-  ServerBuildingOf,
+  ServerBuilding,
 } from "./buildings";
 import NaturalWall from "./NaturalWall";
 
@@ -54,8 +54,12 @@ export const BuildingDefs = {
   [K in BuildingKind]: BuildingDef<K>;
 };
 
+export const DIRTY_CHUNKS_TICKS = 20;
+export const CHUNK_WIDTH = 64;
+export const CHUNK_HEIGHT = 64;
+
 type BuildingSystem<K extends BuildingKind> = (
-  building: ServerBuildingOf<K>,
+  building: ServerBuilding<K>,
   dt: number,
 ) => void;
 

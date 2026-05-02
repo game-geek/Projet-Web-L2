@@ -5,6 +5,8 @@ export default class WebTransportCommunication {
   private transport: null | WebTransport;
   public gameServerURL: null | string = null;
   public ready = false;
+  public readable: null | ReadableStream<any> = null;
+  public writable: null | WritableStream<any> = null;
   constructor() {}
 
   public async connectToGameServer(gameServerUrl: string) {
@@ -19,6 +21,26 @@ export default class WebTransportCommunication {
       await this.transport.ready;
       this.ready = true;
 
+      const writer = this.transport.datagrams.writable.getWriter();
+      const data = new TextEncoder().encode('{"pos":[10,20]}'); // Your JSON
+      await writer.write(data); // One atomic datagram!
+
+      // 3. Receive datagrams (async loop)
+      const reader = this.transport.datagrams.readable.getReader();
+      (async () => {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const json = JSON.parse(new TextDecoder().decode(value));
+          console.log("Server datagram:", json);
+        }
+      })();
+
+      let e = async () => {
+        await this.transport?.closed;
+        console.log("transport closed");
+      };
+      e();
       return true;
     } catch (err) {
       this.transport = null;

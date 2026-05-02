@@ -1,27 +1,20 @@
 import {
-  BuildingDefs,
-  BuildingSystemMap,
-  BuildingSystemMapOf,
-  BuildingSystems,
-  BuildingVariantsMap,
   CHUNK_HEIGHT,
   CHUNK_WIDTH,
   DIRTY_CHUNKS_TICKS,
-} from "./globals";
+} from "../buildings/globals";
+import { EntityDefs, EntitySystemMapOf, EntitySystems } from "./globals";
 
-export type BuildingVariantMap = {
-  [K in keyof typeof BuildingVariantsMap]: (typeof BuildingVariantsMap)[K][number];
+export type EntityKind = keyof typeof EntityDefs;
+
+type EnitiyTextures<K extends EntityKind> = {
+  [V in keyof (typeof EntityDefs)[K]["client"]["textures"]]: string;
 };
 
-export type BuildingKind = keyof typeof BuildingVariantsMap;
-type BuildingTextures<K extends BuildingKind> = {
-  [V in (typeof BuildingVariantsMap)[K][number]]: string;
-};
-
-export type BuildingDef<K extends BuildingKind> = {
+export type EntityDef<K extends EntityKind> = {
   shared: {
     maxHp: number;
-    destructible: boolean;
+    killable: boolean;
     w: number;
     h: number;
   };
@@ -29,15 +22,14 @@ export type BuildingDef<K extends BuildingKind> = {
     initState: () => Record<string, unknown>;
   };
   client: {
-    textures: BuildingTextures<K>;
+    textures: EnitiyTextures<K>;
     components: readonly string[];
   };
 };
 
-export type BuildingSnapshot<K extends BuildingKind> = {
+export type BuildingSnapshot<K extends EntityKind> = {
   id: number;
   kind: K;
-  variant: BuildingVariantMap[K];
   x: number;
   y: number;
   w: number;
@@ -48,17 +40,14 @@ export type BuildingSnapshot<K extends BuildingKind> = {
   customState: Record<string, unknown>;
 };
 
-export class ServerBuilding<
-  K extends BuildingKind,
-> implements BuildingSnapshot<K> {
-  private updateFunction: BuildingSystemMapOf<K>;
+export class ServerEntity<K extends EntityKind> implements BuildingSnapshot<K> {
+  private updateFunction: EntitySystemMapOf<K>;
   public pendingPatch: Partial<BuildingSnapshot<K>> = {};
   public allDirtyChunksAt: number = 0;
 
   constructor(
     public id: number,
     public kind: K,
-    public variant: BuildingVariantMap[K],
     public x: number,
     public y: number,
     public w: number,
@@ -70,7 +59,7 @@ export class ServerBuilding<
     public chunkPositioning: [number, number][] = [],
     public allDirtyChunks: DirtyChunkType[][][],
   ) {
-    this.updateFunction = BuildingSystems[kind];
+    this.updateFunction = EntitySystems[kind];
   }
 
   markDirty<F extends keyof BuildingSnapshot<K>>(
@@ -92,23 +81,21 @@ export class ServerBuilding<
   }
 }
 
-export function createBuilding<K extends BuildingKind>(
+export function createBuilding<K extends EntityKind>(
   kind: K,
-  variant: BuildingVariantMap[K],
   x: number,
   y: number,
   id: number,
   chunkPositioning: [number, number][] = [],
   allDirtyChunks: DirtyChunkType[][][],
 ) {
-  const def = BuildingDefs[kind].shared;
-  const customDef = BuildingDefs[kind].server;
+  const def = EntityDefs[kind].shared;
+  const customDef = EntityDefs[kind].server;
   const customState = customDef.initState();
   console.log("ID", id);
-  return new ServerBuilding(
+  return new ServerEntity(
     id,
     kind,
-    variant,
     x,
     y,
     def.w,
@@ -121,14 +108,14 @@ export function createBuilding<K extends BuildingKind>(
     allDirtyChunks,
   );
 }
-export type AnyServerBuilding = ServerBuilding<BuildingKind>;
-export type AnyBuildingSnapshot = BuildingSnapshot<BuildingKind>;
-export type DirtyChunkType = { [id: number]: Partial<AnyBuildingSnapshot> };
-export class MapBuildings {
-  public readonly buildings: (AnyServerBuilding | null)[][] = [];
+export type AnyServerEntity = ServerEntity<EntityKind>;
+export type AnyEntitySnapshot = BuildingSnapshot<EntityKind>;
+export type DirtyChunkType = { [id: number]: Partial<AnyEntitySnapshot> };
+export class MapEntities {
+  public readonly entities: (AnyServerEntity | null)[][] = [];
   public readonly allDirtyChunks: DirtyChunkType[][][] = [];
   public allDirtyChunksAt = 0;
-  public readonly chunkPositioningPerBuilding: {
+  public readonly chunkPositioningPerEntity: {
     [id: number]: [number, number][];
   } = {};
   // Important: The chunk sizes must be at the very least the size of the biggest building... (otherwise need to recode stuff ...)
@@ -141,10 +128,10 @@ export class MapBuildings {
   ) {
     // buildings
     for (let y = 0; y < mapHeight; y++) {
-      this.buildings.push([]);
+      this.entities.push([]);
 
       for (let x = 0; x < mapWidth; x++) {
-        this.buildings[y].push(null);
+        this.entities[y].push(null);
       }
     }
     // chunks
@@ -162,16 +149,15 @@ export class MapBuildings {
     }
   }
 
-  createAndAddBuilding<K extends BuildingKind>(
+  createAndAddBuilding<K extends EntityKind>(
     kind: K,
-    variant: BuildingVariantMap[K],
     x: number,
     y: number,
     id: number,
   ) {
     // verify if its position is correct w/ the map and if its a valid position
-    const buildingWidth = BuildingDefs[kind].shared.w;
-    const buildingHeight = BuildingDefs[kind].shared.h;
+    const buildingWidth = EntityDefs[kind].shared.w;
+    const buildingHeight = EntityDefs[kind].shared.h;
     if (
       !(
         x >= 0 &&
@@ -183,12 +169,12 @@ export class MapBuildings {
       return "Placement out of map";
     for (let map_y = y; map_y < y + buildingHeight; map_y++) {
       for (let map_x = x; map_x < x + buildingWidth; map_x++) {
-        if (this.buildings[map_y][map_x]) return "Invalid building location";
+        if (this.entities[map_y][map_x]) return "Invalid building location";
       }
     }
     for (let map_y = y; map_y < y + buildingHeight; map_y++) {
       for (let map_x = x; map_x < x + buildingWidth; map_x++) {
-        this.chunkPositioningPerBuilding[id] = [];
+        this.chunkPositioningPerEntity[id] = [];
 
         if (
           Math.floor(x / this.chunkWidth) ==
@@ -200,17 +186,17 @@ export class MapBuildings {
             Math.floor((y + buildingHeight) / this.chunkHeight)
           ) {
             // y axis is on the same chunk!
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor(y / this.chunkWidth),
               Math.floor(x / this.chunkWidth),
             ]);
           } else {
             // two diferent y axis chunks ...
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor(y / this.chunkWidth),
               Math.floor(x / this.chunkWidth),
             ]);
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor((y + buildingHeight) / this.chunkWidth),
               Math.floor(x / this.chunkWidth),
             ]);
@@ -222,42 +208,41 @@ export class MapBuildings {
             Math.floor((y + buildingHeight) / this.chunkHeight)
           ) {
             // y axis is on the same chunk!
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor(y / this.chunkWidth),
               Math.floor(x / this.chunkWidth),
             ]);
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor(y / this.chunkWidth),
               Math.floor((x + buildingWidth) / this.chunkWidth),
             ]);
           } else {
             // two diferent y axis chunks and x axis chunks ...
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor(y / this.chunkWidth),
               Math.floor(x / this.chunkWidth),
             ]);
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor((y + buildingHeight) / this.chunkWidth),
               Math.floor(x / this.chunkWidth),
             ]);
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor(y / this.chunkWidth),
               Math.floor(x / this.chunkWidth),
             ]);
-            this.chunkPositioningPerBuilding[id].push([
+            this.chunkPositioningPerEntity[id].push([
               Math.floor((y + buildingHeight) / this.chunkWidth),
               Math.floor(x / this.chunkWidth),
             ]);
           }
         }
 
-        this.buildings[map_y][map_x] = createBuilding(
+        this.entities[map_y][map_x] = createBuilding(
           kind,
-          variant,
           x,
           y,
           id,
-          this.chunkPositioningPerBuilding[id],
+          this.chunkPositioningPerEntity[id],
           this.allDirtyChunks,
         );
       }
@@ -267,7 +252,7 @@ export class MapBuildings {
   updateBuildings(dt: number) {
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
-        this.buildings[y][x]?.update(dt, this.allDirtyChunksAt);
+        this.entities[y][x]?.update(dt, this.allDirtyChunksAt);
       }
     }
   }
@@ -276,11 +261,9 @@ export class MapBuildings {
     for (let y = 0; y < this.mapHeight; y++) {
       let line = "";
       for (let x = 0; x < this.mapWidth; x++) {
-        let b = this.buildings[y][x];
+        let b = this.entities[y][x];
         line +=
-          b != null
-            ? (b?.kind + " - " + b?.variant).padEnd(20, "_").slice(0, 20)
-            : "".padEnd(20, "_");
+          b != null ? b?.kind.padEnd(20, "_").slice(0, 20) : "".padEnd(20, "_");
         line += "  ";
       }
       console.log(line);
