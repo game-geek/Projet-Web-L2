@@ -1,16 +1,30 @@
 import {
   AnyServerBuilding,
+  BuildingSnapshotFields,
   DirtyBuildingChunkType,
   MapBuildings,
 } from "./buildings/buildings";
-import { CHUNK_HEIGHT, CHUNK_WIDTH } from "./buildings/globals";
+import {
+  CHUNK_HEIGHT,
+  CHUNK_WIDTH,
+  MAP_HEIGHT,
+  MAP_WIDTH,
+} from "./buildings/globals";
 import Session from "./Session";
 import buildingsDeltaBuilder from "./buildings/buildingDeltaBuilder";
 import buildingsSnapshotBuilder from "./buildings/buildingsSnapshotBuilder";
 import entitiesDeltaBuilder from "./entities/entitiesDeltaBuilder";
 import entitiesSnapshotBuilder from "./entities/entitiesSnapshotBuilder";
-import { AnyServerEntity, DirtyEntityChunkType } from "./entities/entities";
+import {
+  AnyServerEntity,
+  DirtyEntityChunkType,
+  EnitiySnapshotFields,
+  MapEntities,
+} from "./entities/entities";
 import * as z from "zod";
+import { ServerStreamtype } from "../../game-client/src/serverCommunication";
+import { GLOBAL_INDEX, incrementGlobalIndex } from "./loadMap";
+import { EntityDefs, EntityKinds } from "./entities/globals";
 
 type ViewAreaType = { x: number; y: number; width: number; height: number };
 
@@ -18,17 +32,26 @@ const IncomingDatagramSchema = z.object({
   t: z.number(),
   ack: z.number(),
 });
-type Datagramtype = z.input<typeof IncomingDatagramSchema>;
+type ClientDatagramtype = z.input<typeof IncomingDatagramSchema>;
 
 const IncomingStreamSchema = z.object({
   t: z.number(),
   a: z
     .object({
-      tM: z.array(z.number()).optional(),
+      bM: z.array(z.number()).optional(),
+      sp: z
+        .array(
+          z.object({
+            n: z.literal(EntityKinds),
+            x: z.number(),
+            y: z.number(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
 });
-type Streamtype = z.input<typeof IncomingStreamSchema>;
+export type ClientStreamtype = z.input<typeof IncomingStreamSchema>;
 
 export default class Player {
   public chunks: [number, number][] = [];
@@ -39,7 +62,11 @@ export default class Player {
   public entitiesSnapshotBuilder: entitiesSnapshotBuilder | null = null;
   private clientTick = 0;
 
+  private serverStream: ServerStreamtype | null = null;
+
   private buildingToMine: Set<number> = new Set();
+  private currency = 500;
+  private entities: number[] = [];
 
   private bs = -1;
   private es = -1;
@@ -49,6 +76,7 @@ export default class Player {
   constructor(
     public ViewArea: ViewAreaType,
     public buildingsMap: MapBuildings,
+    public entitiesMap: MapEntities,
   ) {
     this.updateChunkView();
   }
@@ -128,7 +156,11 @@ export default class Player {
     else this.ed = tick;
   }
 
-  addBuildingsToMine(buildingIds: number[]) {
+  private addBuildingsToMine(
+    buildingIds: number[],
+    tick: number,
+    clientTick: number,
+  ) {
     for (const buildingID of buildingIds) {
       const building = this.buildingsMap.allBuildings.get(buildingID);
       if (building) {
@@ -141,17 +173,52 @@ export default class Player {
         }
       }
     }
+    if (!this.serverStream) this.serverStream = { t: tick };
+    if (!this.serverStream.a) this.serverStream.a = {};
+    const bM = [];
+    for (const buildingId of this.buildingToMine.values()) {
+      bM.push(buildingId);
+    }
+    if (!this.serverStream.a) this.serverStream.a = {};
+    if (!this.serverStream.a.bM)
+      this.serverStream.a.bM = [{ t: clientTick, bM: bM }];
+    else this.serverStream.a.bM.push({ t: clientTick, bM: bM });
+    console.log("Adding a the full buildings to mine list to the stream");
   }
 
-  processStreams() {
+  createActionsSnapshot(tick: number) {
+    if (!this.serverStream) this.serverStream = { t: tick };
+    if (!this.serverStream.a) this.serverStream.a = {};
+
+    // buildingsToMine
+    if (!this.serverStream.a.bM)
+      this.serverStream.a.bM = [{ t: tick, bM: [...this.buildingToMine] }];
+
+    // currency
+    this.serverStream.a.c = this.currency;
+  }
+
+  processStreams(tick: number) {
     if (!this.session) return;
     if (this.session.incomingStreams.size == 0) return;
     for (const stream of this.session.incomingStreams) {
       const parsedStream = IncomingStreamSchema.parse(stream);
-      console.log("New client stream");
-      if (parsedStream.a && parsedStream.a.tM) {
+      console.log("processing new client stream");
+      if (parsedStream.a && parsedStream.a.bM) {
         // buildings to mine
-        this.addBuildingsToMine(parsedStream.a.tM);
+        this.addBuildingsToMine(parsedStream.a.bM, tick, parsedStream.t);
+      }
+      if (parsedStream.a && parsedStream.a.sp) {
+        for (const spawnAction of parsedStream.a.sp) {
+          this.entitiesMap.createAndAddEntity(
+            spawnAction.n,
+            Math.floor(spawnAction.x),
+            Math.floor(spawnAction.y),
+            GLOBAL_INDEX,
+          );
+          this.entities.push(GLOBAL_INDEX);
+          incrementGlobalIndex();
+        }
       }
       this.session.incomingStreams.delete(stream);
     }
@@ -162,6 +229,7 @@ export default class Player {
     if (this.session.incomingDatagrams.size == 0) return;
     const parsedDatagrams = [];
     for (const datagram of this.session.incomingDatagrams) {
+      console.log("processing new client datagram");
       try {
         parsedDatagrams.push(IncomingDatagramSchema.parse(datagram));
       } catch {
@@ -177,7 +245,7 @@ export default class Player {
     );
     this.applyDatagram(parsedDatagrams[latestDatagramIndex]);
   }
-  applyDatagram(datagram: Datagramtype) {
+  private applyDatagram(datagram: ClientDatagramtype) {
     if (!this.buildingsDeltaBuilder || !this.entitiesDeltaBuilder) return;
     if (datagram.t < this.clientTick)
       return console.log("dropped old datagram");
@@ -194,6 +262,8 @@ export default class Player {
       !this.session
     )
       return;
+
+    console.log("Creating buildings snapshot");
     if (this.bs == tick) return;
     this.buildingsSnapshotBuilder.createSnapshot();
     this.bs = tick;
@@ -207,6 +277,7 @@ export default class Player {
       !this.session
     )
       return;
+    console.log("Creating entities snapshot");
     if (this.es == tick) return;
     this.entitiesSnapshotBuilder.createSnapshot();
     this.es = tick;
@@ -233,6 +304,7 @@ export default class Player {
       !this.session
     )
       return;
+    console.log("Sending the delta");
     if (this.bd == tick && this.ed == tick) {
       this.session.sendDatagramJSON({
         t: tick,
@@ -261,22 +333,64 @@ export default class Player {
       !this.session
     )
       return;
-    if (this.bs == tick && this.es == tick) {
-      this.session.sendStreamJSON({
-        t: tick,
-        bs: this.buildingsSnapshotBuilder.snapshot,
-        es: this.entitiesSnapshotBuilder.snapshot,
-      });
-    } else if (this.bs == tick) {
-      this.session.sendStreamJSON({
-        t: tick,
-        bs: this.buildingsSnapshotBuilder.snapshot,
-      });
+
+    console.log("Sending the built stream");
+    if (!this.serverStream) this.serverStream = { t: tick };
+    if (this.bs == tick) {
+      this.serverStream.bs = this.buildingsSnapshotBuilder.snapshot;
     } else if (this.es == tick) {
-      this.session.sendStreamJSON({
-        t: tick,
-        es: this.entitiesSnapshotBuilder.snapshot,
-      });
+      this.serverStream.es = this.entitiesSnapshotBuilder.snapshot;
     }
+
+    // add newly created entities + buildings, should be based on chunks and building visibility
+    if (this.entitiesMap.fullDirtyEntities.size > 0) {
+      if (!this.serverStream.a) this.serverStream.a = {};
+      if (!this.serverStream.a.nE) this.serverStream.a.nE = {};
+      for (const entity of this.entitiesMap.fullDirtyEntities) {
+        // @ts-ignore
+        this.serverStream.a.nE[entity.id] = {};
+        for (const field of EnitiySnapshotFields) {
+          if (field == "id") continue;
+          if (field == "customState") {
+            // @ts-ignore
+            this.serverStream.a.nE[entity.id][field] = structuredClone(
+              // @ts-ignore
+              entity[field],
+            );
+          }
+          // @ts-ignore
+          else this.serverStream.a.nE[entity.id][field] = entity[field];
+        }
+        console.log(this.serverStream.a.nE[entity.id]);
+      }
+    }
+    if (this.buildingsMap.fullDirtyBuildings.size > 0) {
+      if (!this.serverStream.a) this.serverStream.a = {};
+      if (!this.serverStream.a.nB) this.serverStream.a.nB = {};
+      for (const building of this.buildingsMap.fullDirtyBuildings) {
+        // @ts-ignore
+        this.serverStream.a.nB[building.id] = {};
+        for (const field of BuildingSnapshotFields) {
+          if (field == "id") continue;
+          if (field == "customState") {
+            // @ts-ignore
+            this.serverStream.a.nB[building.id][field] = structuredClone(
+              // @ts-ignore
+              building[field],
+            );
+          }
+          // @ts-ignore
+          else this.serverStream.a.nB[building.id][field] = building[field];
+        }
+        console.log(this.serverStream.a.nB[building.id]);
+      }
+    }
+
+    console.log("stream", this.serverStream);
+    if (Object.keys(this.serverStream).length > 1)
+      this.session.sendStreamJSON(this.serverStream);
+
+    // flush
+    this.serverStream = null;
   }
 }

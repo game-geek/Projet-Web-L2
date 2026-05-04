@@ -12,6 +12,11 @@ import {
   MAP_WIDTH,
 } from "./buildings/globals";
 
+export let GLOBAL_INDEX = 0;
+export function incrementGlobalIndex() {
+  GLOBAL_INDEX += 1;
+}
+
 // A Tiled Map has multiple layers and multiple tilesets
 // At the moment the code ONLY loads the first layer
 // Multiple tilesets are supported with the following conditions:
@@ -194,6 +199,7 @@ export async function loadMap(mapPath: string, tilesetPaths: string[]) {
     x = i % MAP_WIDTH;
     y = Math.floor(i / MAP_HEIGHT);
   }
+  GLOBAL_INDEX = i + 1;
 
   // For debug purposes display the in-memory map
   // serverBuildingsMap._displayDebugMap();

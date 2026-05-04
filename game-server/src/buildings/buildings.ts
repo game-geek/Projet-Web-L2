@@ -143,6 +143,7 @@ export class MapBuildings {
   public readonly buildings: (AnyServerBuilding | null)[][] = [];
   public readonly allBuildings: Map<number, AnyServerBuilding> = new Map();
   public readonly allDirtyChunks: DirtyBuildingChunkType[][][] = [];
+  public readonly fullDirtyBuildings: Set<AnyServerBuilding> = new Set();
   public allDirtyChunksAt = 0;
   public readonly chunkPositioningPerBuilding: {
     [id: number]: [number, number][];
@@ -280,12 +281,15 @@ export class MapBuildings {
         if (this.buildings[map_y][map_x])
           // @ts-ignore
           this.allBuildings.set(id, this.buildings[map_y][map_x]);
+        // @ts-ignore
+        this.fullDirtyBuildings.add(this.buildings[map_y][map_x]);
       }
     }
   }
 
   updateBuildings(dt: number) {
     this.allDirtyChunksAt = (this.allDirtyChunksAt + 1) % DIRTY_CHUNKS_TICKS;
+    this.fullDirtyBuildings.clear();
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
         this.buildings[y][x]?.update(dt, this.allDirtyChunksAt);

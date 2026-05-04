@@ -1,3 +1,4 @@
+import { ServerStreamtype } from "../../../game-client/src/serverCommunication";
 import Player from "../Player";
 import {
   AnyServerBuilding,
@@ -6,7 +7,7 @@ import {
 } from "./buildings";
 
 export default class buildingsSnapshotBuilder {
-  public snapshot: DirtyBuildingChunkType = {};
+  public snapshot: ServerStreamtype["bs"] = {};
   constructor(
     public player: Player,
     public buildings: (AnyServerBuilding | null)[][],
@@ -28,9 +29,10 @@ export default class buildingsSnapshotBuilder {
       ) {
         const b = this.buildings[y][x];
         if (b == null) continue;
-
+        // @ts-ignore
         this.snapshot[b.id] = {};
         for (const field of BuildingSnapshotFields) {
+          if (field == "id") continue;
           if (field == "customState")
             this.snapshot[b.id][field] = structuredClone(b[field]);
           //@ts-ignore

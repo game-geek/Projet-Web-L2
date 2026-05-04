@@ -34,18 +34,26 @@ export default class Session {
       this.readStreamManager = new ReadStream(
         dataReader,
         this.newStreamPayload,
+        this,
       );
     })();
   }
 
-  async newStreamPayload(stream: Uint8Array<ArrayBufferLike>) {
+  async newStreamPayload(
+    stream: Uint8Array<ArrayBufferLike>,
+    session: Session | null = null,
+  ) {
+    if (!session) return console.log("fatal error in newStreamPlayload");
     try {
       const json = JSON.parse(new TextDecoder().decode(stream));
-      console.log(this.incomingStreams);
-      this.incomingStreams.add(json);
+      console.log(session.incomingStreams);
+      session.incomingStreams.add(json);
       console.log("new stream payload: ", json);
     } catch (err) {
-      console.log("new stream payload: Invalid stream: must be JSON bytes");
+      console.log(
+        "new stream payload: Invalid stream: must be JSON bytes",
+        err,
+      );
     }
   }
 
@@ -99,11 +107,17 @@ export class ReadStream {
   private packetlengthAt = 0;
   private writePos = 0;
   private chunkAt = 0;
+  private session: Session | null = null;
 
   constructor(
     dataReader: ReadableStreamDefaultReader<Uint8Array<ArrayBufferLike>>,
-    public payloadCallback: (a: Uint8Array<ArrayBufferLike>) => void,
+    public payloadCallback: (
+      a: Uint8Array<ArrayBufferLike>,
+      s: null | Session,
+    ) => void,
+    session: Session | null = null,
   ) {
+    this.session = session;
     this.start(dataReader);
   }
 
@@ -193,7 +207,10 @@ export class ReadStream {
           this.newPacket = true;
           this.writePos = 0;
 
-          this.payloadCallback(this.buffer.subarray(0, this.messageLength));
+          this.payloadCallback(
+            this.buffer.subarray(0, this.messageLength),
+            this.session,
+          );
         }
       }
     }

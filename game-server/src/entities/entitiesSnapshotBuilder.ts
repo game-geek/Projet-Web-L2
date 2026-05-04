@@ -1,3 +1,4 @@
+import { ServerStreamtype } from "../../../game-client/src/serverCommunication";
 import Player from "../Player";
 import {
   AnyServerEntity,
@@ -6,7 +7,7 @@ import {
 } from "./entities";
 
 export default class entitiesSnapshotBuilder {
-  public snapshot: DirtyEntityChunkType = {};
+  public snapshot: ServerStreamtype["es"] = {};
   constructor(
     public player: Player,
     public entityChunks: Set<AnyServerEntity>[][],
@@ -17,8 +18,10 @@ export default class entitiesSnapshotBuilder {
     this.snapshot = {};
     for (const [chunkY, chunkX] of this.chunks) {
       for (const entity of this.entityChunks[chunkY][chunkX]) {
+        // @ts-ignore
         this.snapshot[entity.id] = {};
         for (const field in EnitiySnapshotFields) {
+          if (field == "id") continue;
           if (field == "customState") {
             // @ts-ignore
             this.snapshot[entity.id][field] = structuredClone(entity[field]);

@@ -6,6 +6,7 @@ import {
   BuildingVariantMap,
 } from "../../../../game-server/src/buildings/buildings";
 import { BuildingDefs } from "../../../../game-server/src/buildings/globals";
+import MiningOverlay from "./MiningOverlay";
 import RenderStatic from "./RenderStatic";
 
 export type DeltaField =
@@ -20,13 +21,15 @@ export type DeltaField =
 export type Component = {
   onDelta: (delta: Partial<Record<DeltaField, any>>) => void;
   update: (dt: number) => void;
+  destroy: () => void;
 };
 
-const componentRegistry = {
+export const componentRegistry = {
   RenderStatic: RenderStatic,
+  MiningOverlay: MiningOverlay,
 };
 export class ClientBuilding<K extends BuildingKind> {
-  public components: Component[] = [];
+  public components: Map<string, Component> = new Map();
   public deltaFieldsSub: Partial<Record<DeltaField, Set<string>>> = {};
 
   constructor(
@@ -43,8 +46,14 @@ export class ClientBuilding<K extends BuildingKind> {
     public customState: Record<number, unknown>,
   ) {}
 
-  addComponent(component: Component) {
-    this.components.push(component);
+  addComponent(name: string, component: Component) {
+    // should typesafe name + component...
+    this.components.set(name, component);
+  }
+  removeComponent(name: string) {
+    const c = this.components.get(name);
+    if (c) c.destroy();
+    this.components.delete(name);
   }
 }
 
@@ -112,6 +121,20 @@ export class MapBuildings {
       console.log(line);
     }
   }
+
+  addComponent(
+    buildingID: number,
+    name: keyof typeof componentRegistry,
+    Comp: (typeof componentRegistry)[keyof typeof componentRegistry],
+    scene: Phaser.Scene,
+  ) {
+    const b = this.buildings.get(buildingID);
+    if (b && !b.components.has(name)) b.addComponent(name, new Comp(b, scene));
+  }
+  removeComponent(buildingID: number, name: keyof typeof componentRegistry) {
+    const b = this.buildings.get(buildingID);
+    if (b) b.removeComponent(name);
+  }
 }
 export function issueDeltaUpdate(
   building: ClientBuilding<BuildingKind>,
@@ -168,7 +191,7 @@ export function createClientBuilding(
     if (componentName in componentRegistry) {
       // add the component
       const Comp = componentRegistry[componentName];
-      building.addComponent(new Comp(building, scene));
+      building.addComponent(componentName, new Comp(building, scene));
     }
   });
 

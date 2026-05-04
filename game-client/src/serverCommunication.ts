@@ -48,7 +48,52 @@ type IncomingDatagramSchemaType = z.input<typeof IncomingDatagramSchema>;
 
 const IncomingStreamSchema = z.object({
   t: z.number(),
-  a: z.any().optional(),
+  a: z
+    .object({
+      bM: z
+        .array(
+          z.object({
+            bM: z.array(z.number()),
+            t: z.number(),
+          }),
+        )
+        .optional(),
+      c: z.number().optional(),
+      nE: z
+        .record(
+          z.string(),
+          z.object({
+            kind: z.string(),
+            x: z.number(),
+            y: z.number(),
+            w: z.number(),
+            h: z.number(),
+            maxHp: z.number(),
+            hp: z.number(),
+            destroyed: z.boolean(),
+            customState: z.record(z.string(), z.any()),
+          }),
+        )
+        .optional(),
+      nB: z
+        .record(
+          z.string(),
+          z.object({
+            kind: z.string(),
+            variant: z.string(),
+            x: z.number(),
+            y: z.number(),
+            w: z.number(),
+            h: z.number(),
+            maxHp: z.number(),
+            hp: z.number(),
+            destroyed: z.boolean(),
+            customState: z.record(z.string(), z.any()),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   es: z
     .record(
       z.string(),
@@ -83,7 +128,7 @@ const IncomingStreamSchema = z.object({
     )
     .optional(),
 });
-type IncomingStreamSchemaType = z.input<typeof IncomingStreamSchema>;
+export type ServerStreamtype = z.input<typeof IncomingStreamSchema>;
 
 export default class serverCommunication {
   // Create new low-level web transport connection
@@ -92,14 +137,14 @@ export default class serverCommunication {
   public gameServerURl: null | string = null;
   public latestDatagram: IncomingDatagramSchemaType | null = null;
   public latestBuildingSnapshot: {
+    bs: ServerStreamtype["bs"];
     t: number;
-    bd: IncomingStreamSchemaType["bs"];
   } | null = null;
   public latestEntitySnapshot: {
+    es: ServerStreamtype["es"];
     t: number;
-    ed: IncomingStreamSchemaType["es"];
   } | null = null;
-  public latestActions: Set<any> = new Set();
+  public latestActions: Set<ServerStreamtype["a"]> = new Set();
 
   async initConnection(gameServerURL: string) {
     const response = await this.webT.connectToGameServer(gameServerURL);
@@ -130,7 +175,7 @@ export default class serverCommunication {
   }
 
   parseStreams() {
-    const parsedStreams: IncomingStreamSchemaType[] = [];
+    const parsedStreams: ServerStreamtype[] = [];
     for (const stream of this.webT.incomingStreams) {
       try {
         parsedStreams.push(IncomingStreamSchema.parse(stream));
@@ -156,20 +201,20 @@ export default class serverCommunication {
         } else latestEI = i;
       }
       if (stream.a) {
-        this.latestActions.add({ t: stream.t, a: stream.a });
+        this.latestActions.add(stream.a);
       }
     });
 
     if (latestBI >= 0) {
       this.latestBuildingSnapshot = {
         t: parsedStreams[latestBI].t,
-        bd: parsedStreams[latestBI].bs,
+        bs: parsedStreams[latestBI].bs,
       };
     }
     if (latestEI >= 0) {
       this.latestEntitySnapshot = {
         t: parsedStreams[latestBI].t,
-        ed: parsedStreams[latestBI].es,
+        es: parsedStreams[latestBI].es,
       };
     }
   }

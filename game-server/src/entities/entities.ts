@@ -2,6 +2,8 @@ import {
   CHUNK_HEIGHT,
   CHUNK_WIDTH,
   DIRTY_CHUNKS_TICKS,
+  MAP_HEIGHT,
+  MAP_WIDTH,
 } from "../buildings/globals";
 import { EntityDefs, EntitySystemMapOf, EntitySystems } from "./globals";
 
@@ -129,6 +131,7 @@ export class MapEntities {
   } = {};
   public readonly entityChunks: Set<AnyServerEntity>[][] = [];
   public readonly allDirtyChunks: DirtyEntityChunkType[][][] = [];
+  public readonly fullDirtyEntities: Set<AnyServerEntity> = new Set();
   public allDirtyChunksAt = 0;
   public readonly chunkPositioningPerEntity: {
     [id: number]: [number, number][];
@@ -177,13 +180,13 @@ export class MapEntities {
     const entityHeight = EntityDefs[kind].shared.h;
     if (
       !(
-        x >= 0 &&
-        x + entityWidth < this.mapWidth &&
-        y >= 0 &&
-        y + entityHeight < this.mapHeight
+        x > 0 &&
+        y > 0 &&
+        x + EntityDefs[kind].shared.w < this.mapWidth * 32 &&
+        y + EntityDefs[kind].shared.h < this.mapHeight * 32
       )
     )
-      return "Placement out of map";
+      return console.log("aborting: Placement of entity out of map");
 
     // selecting the right chunks
     this.chunkPositioningPerEntity[id] = [];
@@ -197,6 +200,7 @@ export class MapEntities {
       this.allDirtyChunks,
     );
     this.updateEntityChunks(this.entities[id]);
+    this.fullDirtyEntities.add(this.entities[id]);
   }
 
   updateEntityChunksBasedOnDirty() {
@@ -227,13 +231,13 @@ export class MapEntities {
     }
     this.chunkPositioningPerEntity[entity.id] = [];
     for (
-      let chunk_y = Math.floor(entity.y / CHUNK_HEIGHT);
-      chunk_y < Math.ceil((entity.y + entity.h) / CHUNK_HEIGHT);
+      let chunk_y = Math.floor(entity.y / (CHUNK_HEIGHT * 32));
+      chunk_y < Math.ceil((entity.y + entity.h) / (CHUNK_HEIGHT * 32));
       chunk_y += 1
     ) {
       for (
-        let chunk_x = Math.floor(entity.x / CHUNK_WIDTH);
-        chunk_x < Math.ceil((entity.x + entity.w) / CHUNK_WIDTH);
+        let chunk_x = Math.floor(entity.x / (CHUNK_WIDTH * 32));
+        chunk_x < Math.ceil((entity.x + entity.w) / (CHUNK_WIDTH * 32));
         chunk_x += 1
       ) {
         this.chunkPositioningPerEntity[entity.id].push([chunk_y, chunk_x]);
@@ -247,6 +251,7 @@ export class MapEntities {
 
   updateEntities(dt: number) {
     this.allDirtyChunksAt = (this.allDirtyChunksAt + 1) % DIRTY_CHUNKS_TICKS;
+    this.fullDirtyEntities.clear();
     for (const entityID in this.entities) {
       this.entities[entityID].update(dt, this.allDirtyChunksAt);
     }

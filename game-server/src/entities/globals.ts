@@ -1,5 +1,6 @@
 import Eliptae from "./Eliptae";
 import { EntityDef, EntityKind, ServerEntity } from "./entities";
+import Miner from "./Miner";
 
 // the default data related to those buildings
 export const EntityDefs = {
@@ -19,10 +20,31 @@ export const EntityDefs = {
         right: "eliptae_right",
         bottom: "eliptae_bottom",
       },
-      components: ["renderable", "health"] as const,
+      components: ["Render"] as const,
+    },
+  },
+  miner: {
+    shared: { maxHp: 100, killable: true, w: 30, h: 30 },
+    server: {
+      initState: () => ({
+        mining: null,
+      }),
+    },
+    client: {
+      textures: {
+        top: "miner_top",
+        left: "miner_left",
+        right: "miner_right",
+        bottom: "miner_bottom",
+      },
+      components: ["Render"] as const,
     },
   },
 } as const;
+
+export const EntityKinds = Object.keys(
+  EntityDefs,
+) as (keyof typeof EntityDefs)[];
 
 type EntitySystem<K extends EntityKind> = (
   entity: ServerEntity<K>,
@@ -37,4 +59,5 @@ export type EntitySystemMapOf<K extends EntityKind> = EntitySystemMap[K];
 
 export const EntitySystems: EntitySystemMap = {
   eliptae: Eliptae,
+  miner: Miner,
 } as const;

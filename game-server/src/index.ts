@@ -12,13 +12,19 @@ const serverBuildingsMap = await loadMap(
     "/home/asus/Documents/Etudes Info L2/Dev web/Projet web/game-server/src/maps/map1/new_natural_tiles.tsj",
   ],
 );
-
-export const players: Map<string, Player> = new Map();
-players.set("playerIDDB", new Player({ x: 0, y: 0, width: 10, height: 10 }));
-
 const serverEntitiesMap = new MapEntities(
   serverBuildingsMap.mapWidth,
   serverBuildingsMap.mapHeight,
+);
+
+export const players: Map<string, Player> = new Map();
+players.set(
+  "playerIDDB",
+  new Player(
+    { x: 0, y: 0, width: 10, height: 10 },
+    serverBuildingsMap,
+    serverEntitiesMap,
+  ),
 );
 
 let tick = 1;
@@ -37,6 +43,7 @@ function update() {
             serverEntitiesMap.entityChunks,
           );
         players.get("playerIDDB")?.createBuildingSnapshot(tick);
+        players.get("playerIDDB")?.createActionsSnapshot(tick);
         players.get("playerIDDB")?.sendSnapshot(tick);
       }
     });
@@ -52,6 +59,7 @@ function update() {
   // build and send the delta snapshot
   players.forEach((player) => {
     player.processDatagrams();
+    player.processStreams(tick);
     player.createDelta(
       tick,
       serverBuildingsMap.allDirtyChunksAt,
@@ -62,5 +70,5 @@ function update() {
   });
   tick++;
 }
-setInterval(update, 500);
+setInterval(update, 50);
 console.log("updated");
