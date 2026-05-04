@@ -1,12 +1,13 @@
 import ServerCommunication from "./serverCommunication";
 import "./connectionUI";
+import "./interfaceUI";
 import StartGame from "./game/main";
 import { closeConnectionUI, openConnectionUI } from "./connectionUI";
 import "./global.css";
 import gameManager from "./game/gameManager";
 
 let server = new ServerCommunication();
-let gameManagerInstance = new gameManager(server);
+export let gameManagerInstance = new gameManager(server);
 
 document.addEventListener("DOMContentLoaded", () => {
   // auto connect to server for debug purposes: until auth is implemented
@@ -18,11 +19,6 @@ export async function start(gameServerURl: string) {
     await server.initConnection(gameServerURl);
     closeConnectionUI();
     const game = StartGame("game-container");
-    game.events.once("ready", () => {
-      game.scene.start("Game", {
-        gameManagerInstance,
-      });
-    });
   } catch (err) {
     console.error(`Could not connect to game with url '${gameServerURl}`);
     openConnectionUI();

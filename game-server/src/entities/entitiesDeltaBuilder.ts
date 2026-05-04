@@ -62,6 +62,7 @@ export default class entitiesDeltaBuilder {
       tickNumber - this.ackedTick - 1,
       "ticks behind",
     );
+    return false;
   }
 
   private addNewSnapshot(dirtyChunks: DirtyEntityChunkType[][]) {

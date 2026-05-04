@@ -9,7 +9,7 @@ import NaturalWall from "./NaturalWall";
 
 // buildings in the game with their variants
 export const BuildingVariantsMap = {
-  natural_wall: ["1"],
+  natural_wall: ["1", "2", "3", "4", "5", "6", "7", "8"],
 } as const; // "as const" is needed for the types match PERFECTLY their values, for ex "top" is "top" and not string
 
 // the default data related to those buildings
@@ -18,14 +18,19 @@ export const BuildingDefs = {
     shared: { maxHp: 300, destructible: true, w: 1, h: 1 },
     server: {
       initState: () => ({
-        ammo: 30,
-        charge: 0,
-        targetId: null as number | null,
+        toMine: false,
       }),
     },
     client: {
       textures: {
         "1": "assets/natural-tile.png",
+        "2": "assets/natural-tile2.png",
+        "3": "assets/natural-tile3.png",
+        "4": "assets/natural-tile4.png",
+        "5": "assets/natural-tile5.png",
+        "6": "assets/natural-tile6.png",
+        "7": "assets/natural-tile7.png",
+        "8": "assets/natural-tile8.png",
       },
       components: ["RenderStatic"] as const,
     },
@@ -37,8 +42,8 @@ export const BuildingDefs = {
 export const DIRTY_CHUNKS_TICKS = 20;
 export const CHUNK_WIDTH = 64;
 export const CHUNK_HEIGHT = 64;
-export const MAP_WIDTH = 10;
-export const MAP_HEIGHT = 10;
+export const MAP_WIDTH = 100;
+export const MAP_HEIGHT = 100;
 
 type BuildingSystem<K extends BuildingKind> = (
   building: ServerBuilding<K>,

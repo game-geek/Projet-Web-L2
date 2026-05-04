@@ -6,7 +6,11 @@ import {
   MapBuildings,
 } from "./buildings/buildings";
 import * as z from "zod";
-import { BuildingVariantsMap } from "./buildings/globals";
+import {
+  BuildingVariantsMap,
+  MAP_HEIGHT,
+  MAP_WIDTH,
+} from "./buildings/globals";
 
 // A Tiled Map has multiple layers and multiple tilesets
 // At the moment the code ONLY loads the first layer
@@ -187,12 +191,12 @@ export async function loadMap(mapPath: string, tilesetPaths: string[]) {
     }
 
     i++;
-    x = i % 10;
-    y = Math.floor(i / 10);
+    x = i % MAP_WIDTH;
+    y = Math.floor(i / MAP_HEIGHT);
   }
 
   // For debug purposes display the in-memory map
-  serverBuildingsMap._displayDebugMap();
+  // serverBuildingsMap._displayDebugMap();
 
   return serverBuildingsMap;
 }

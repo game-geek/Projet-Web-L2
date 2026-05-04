@@ -142,12 +142,14 @@ export class MapEntities {
     public readonly mapHeight: number,
   ) {
     // entity chunks
+    let chunk_y = 0;
     for (let y = 0; y < mapHeight; y += this.chunkHeight) {
       this.entityChunks.push([]);
 
       for (let x = 0; x < mapWidth; x += this.chunkWidth) {
-        this.entityChunks[y].push(new Set());
+        this.entityChunks[chunk_y].push(new Set());
       }
+      chunk_y += 1;
     }
     // dirty chunks
     for (let tickSave = 0; tickSave < DIRTY_CHUNKS_TICKS; tickSave++) {

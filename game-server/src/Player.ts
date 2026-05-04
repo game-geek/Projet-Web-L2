@@ -1,6 +1,7 @@
 import {
   AnyServerBuilding,
   DirtyBuildingChunkType,
+  MapBuildings,
 } from "./buildings/buildings";
 import { CHUNK_HEIGHT, CHUNK_WIDTH } from "./buildings/globals";
 import Session from "./Session";
@@ -19,6 +20,16 @@ const IncomingDatagramSchema = z.object({
 });
 type Datagramtype = z.input<typeof IncomingDatagramSchema>;
 
+const IncomingStreamSchema = z.object({
+  t: z.number(),
+  a: z
+    .object({
+      tM: z.array(z.number()).optional(),
+    })
+    .optional(),
+});
+type Streamtype = z.input<typeof IncomingStreamSchema>;
+
 export default class Player {
   public chunks: [number, number][] = [];
   public session: Session | null = null;
@@ -28,10 +39,17 @@ export default class Player {
   public entitiesSnapshotBuilder: entitiesSnapshotBuilder | null = null;
   private clientTick = 0;
 
+  private buildingToMine: Set<number> = new Set();
+
   private bs = -1;
   private es = -1;
+  private bd = -1;
+  private ed = -1;
 
-  constructor(public ViewArea: ViewAreaType) {
+  constructor(
+    public ViewArea: ViewAreaType,
+    public buildingsMap: MapBuildings,
+  ) {
     this.updateChunkView();
   }
 
@@ -102,16 +120,39 @@ export default class Player {
     )
       return;
 
-    if (this.buildingsDeltaBuilder.tick(tick, allBuildingDirtyChunksAt))
+    if (this.buildingsDeltaBuilder.tick(tick, allBuildingDirtyChunksAt)) {
       this.createBuildingSnapshot(tick);
+    } else this.bd = tick;
     if (this.entitiesDeltaBuilder.tick(tick, allBEntityDirtyChunksAt))
       this.createEntitySnapshot(tick);
+    else this.ed = tick;
+  }
+
+  addBuildingsToMine(buildingIds: number[]) {
+    for (const buildingID of buildingIds) {
+      const building = this.buildingsMap.allBuildings.get(buildingID);
+      if (building) {
+        // check ownership
+        // ....
+        if (building.kind == "natural_wall") {
+          // can mine
+          if (!this.buildingToMine.has(buildingID))
+            this.buildingToMine.add(buildingID);
+        }
+      }
+    }
   }
 
   processStreams() {
     if (!this.session) return;
     if (this.session.incomingStreams.size == 0) return;
     for (const stream of this.session.incomingStreams) {
+      const parsedStream = IncomingStreamSchema.parse(stream);
+      console.log("New client stream");
+      if (parsedStream.a && parsedStream.a.tM) {
+        // buildings to mine
+        this.addBuildingsToMine(parsedStream.a.tM);
+      }
       this.session.incomingStreams.delete(stream);
     }
   }
@@ -192,23 +233,21 @@ export default class Player {
       !this.session
     )
       return;
-
-    if (this.bs == tick && this.es == tick) {
-    } else if (this.bs == tick) {
-      this.session.sendDatagramJSON({
-        t: tick,
-        ed: this.entitiesDeltaBuilder.snapshot,
-      });
-    } else if (this.es == tick) {
-      this.session.sendDatagramJSON({
-        t: tick,
-        bd: this.buildingsDeltaBuilder.snapshot,
-      });
-    } else {
+    if (this.bd == tick && this.ed == tick) {
       this.session.sendDatagramJSON({
         t: tick,
         bd: this.buildingsDeltaBuilder.snapshot,
         ed: this.entitiesDeltaBuilder.snapshot,
+      });
+    } else if (this.bd == tick) {
+      this.session.sendDatagramJSON({
+        t: tick,
+        bd: this.entitiesDeltaBuilder.snapshot,
+      });
+    } else if (this.ed == tick) {
+      this.session.sendDatagramJSON({
+        t: tick,
+        bd: this.buildingsDeltaBuilder.snapshot,
       });
     }
   }

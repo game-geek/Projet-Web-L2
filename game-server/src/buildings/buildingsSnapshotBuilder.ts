@@ -14,6 +14,7 @@ export default class buildingsSnapshotBuilder {
   ) {}
 
   createSnapshot() {
+    console.log("eheheih<fkjsl");
     this.snapshot = {};
     for (
       let y = this.player.ViewArea.y;
@@ -37,5 +38,6 @@ export default class buildingsSnapshotBuilder {
         }
       }
     }
+    console.log("s", this.snapshot);
   }
 }

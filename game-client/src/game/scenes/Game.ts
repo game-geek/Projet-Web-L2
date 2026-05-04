@@ -1,6 +1,7 @@
-import { Scene } from "phaser";
+import { Scene, Geom, Input } from "phaser";
 import serverCommunication from "../../serverCommunication";
 import gameManager from "../gameManager";
+import { gameManagerInstance } from "../../main";
 
 export class Game extends Scene {
   camera: Phaser.Cameras.Scene2D.Camera;
@@ -9,37 +10,104 @@ export class Game extends Scene {
 
   gameManager: gameManager | null = null;
 
+  private overlayAction: null | "mine" = null;
+
+  private selectionStart: Phaser.Math.Vector2 | null = null;
+  private selectionGraphics: Phaser.GameObjects.Graphics | null = null;
+
   constructor() {
     super("Game");
   }
 
-  init({ gameManagerInstance }: { gameManagerInstance: gameManager }) {
+  setOverlayAction(overlayAction: null | "mine") {
+    if (overlayAction == "mine") {
+      this.input.setDefaultCursor("url('assets/pickaxe2.png') 12 12, auto");
+      this.overlayAction = overlayAction;
+    }
+  }
+
+  init() {
     this.gameManager = gameManagerInstance;
     this.gameManager.init(this);
     console.log("game initialized");
   }
 
   create() {
+    if (!this.input.keyboard) return;
     this.camera = this.cameras.main;
-    this.camera.setBackgroundColor(0x00ff00);
+    this.camera.setBackgroundColor(0x000000);
 
-    this.background = this.add.image(0, 0, "background").setOrigin(0, 0);
-    this.background.setAlpha(0.5);
+    this.selectionGraphics = this.add.graphics();
 
-    this.msg_text = this.add.text(
-      512,
-      384,
-      "Make something fun!\nand share it with us:\nsupport@phaser.io",
-      {
-        fontFamily: "Arial Black",
-        fontSize: 38,
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 8,
-        align: "center",
-      },
-    );
-    this.msg_text.setOrigin(0.5);
+    const esc = this.input.keyboard.addKey(Input.Keyboard.KeyCodes.ESC);
+
+    esc.on("down", () => {
+      console.log("Escape pressed");
+      this.overlayAction = null;
+      this.input.setDefaultCursor("auto");
+    });
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (!this.overlayAction) return;
+      // Save start position in World coordinates
+      this.selectionStart = this.cameras.main.getWorldPoint(
+        pointer.x,
+        pointer.y,
+      );
+    });
+
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (!this.overlayAction) return;
+      if (!this.selectionGraphics) return;
+      if (!this.selectionStart || !pointer.isDown) return;
+
+      const currentWorld = this.cameras.main.getWorldPoint(
+        pointer.x,
+        pointer.y,
+      );
+
+      // Clear the previous frame's drawing
+      this.selectionGraphics.clear();
+
+      // Set the fill color (0x00ff00 is green) and alpha (0.3)
+      this.selectionGraphics.fillStyle(0x555555, 0.3);
+
+      // Set the outline style (optional, for better visibility)
+      this.selectionGraphics.lineStyle(2, 0x3a3a3a, 1.0);
+
+      // Calculate width/height relative to the start point
+      const x = Math.min(this.selectionStart.x, currentWorld.x);
+      const y = Math.min(this.selectionStart.y, currentWorld.y);
+      const width = Math.abs(currentWorld.x - this.selectionStart.x);
+      const height = Math.abs(currentWorld.y - this.selectionStart.y);
+
+      // Draw the filled rectangle and the outline
+      this.selectionGraphics.fillRect(x, y, width, height);
+      this.selectionGraphics.strokeRect(x, y, width, height);
+    });
+
+    this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
+      if (!this.overlayAction || !this.gameManager) return;
+      if (!this.selectionStart) return;
+
+      const endWorld = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+
+      // Create the mathematical rectangle
+      const selectionRect = Geom.Rectangle.FromXY(
+        this.selectionStart.x,
+        this.selectionStart.y,
+        endWorld.x,
+        endWorld.y,
+      );
+      console.log("overlay action", this.overlayAction, selectionRect);
+      this.gameManager.mineSelection(selectionRect);
+
+      // Now check your game objects
+      // Example: this.myGameObjects.filter(obj => selectionRect.contains(obj.x, obj.y))
+
+      if (!this.selectionGraphics) return;
+      this.selectionGraphics.clear();
+      this.selectionStart = null;
+    });
   }
   update(time: number, delta: number): void {
     if (!this.gameManager) return;

@@ -141,6 +141,7 @@ export type DirtyBuildingChunkType = {
 };
 export class MapBuildings {
   public readonly buildings: (AnyServerBuilding | null)[][] = [];
+  public readonly allBuildings: Map<number, AnyServerBuilding> = new Map();
   public readonly allDirtyChunks: DirtyBuildingChunkType[][][] = [];
   public allDirtyChunksAt = 0;
   public readonly chunkPositioningPerBuilding: {
@@ -275,6 +276,10 @@ export class MapBuildings {
           this.chunkPositioningPerBuilding[id],
           this.allDirtyChunks,
         );
+        // @ts-ignore
+        if (this.buildings[map_y][map_x])
+          // @ts-ignore
+          this.allBuildings.set(id, this.buildings[map_y][map_x]);
       }
     }
   }

@@ -2,6 +2,7 @@
 import {
   BuildingKind,
   BuildingSnapshot,
+  BuildingSnapshotFields,
   BuildingVariantMap,
 } from "../../../../game-server/src/buildings/buildings";
 import { BuildingDefs } from "../../../../game-server/src/buildings/globals";
@@ -74,7 +75,7 @@ export class MapBuildings {
         building.y + building.h < this.height
       )
     )
-      return "Placement out of map";
+      return console.log("Placement out of map");
     for (let y = building.y; y < building.y + building.h; y++) {
       for (let x = building.x; x < building.x + building.w; x++) {
         if (this.buildingsMap[y][x])
@@ -88,6 +89,12 @@ export class MapBuildings {
       }
     }
     this.buildings.set(building.id, building);
+    console.log(
+      "setting",
+      building.id,
+      "does it have it ?",
+      this.buildings.has(building.id),
+    );
   }
 
   _displayDebugMap() {
@@ -105,6 +112,34 @@ export class MapBuildings {
       console.log(line);
     }
   }
+}
+export function issueDeltaUpdate(
+  building: ClientBuilding<BuildingKind>,
+  snapshot: Partial<BuildingSnapshot<BuildingKind>>,
+) {
+  for (const field in BuildingSnapshotFields) {
+    if (field == "customState") {
+      // @ts-ignore
+      building[field] = structuredClone(snapshot[field]);
+    }
+    // @ts-ignore
+    building[field] = snapshot[field];
+  }
+  building.components.forEach((comp) => comp.onDelta(snapshot));
+}
+export function issueSnapshotUpdate(
+  building: ClientBuilding<BuildingKind>,
+  snapshot: BuildingSnapshot<BuildingKind>,
+) {
+  for (const field in BuildingSnapshotFields) {
+    if (field == "customState") {
+      // @ts-ignore
+      building[field] = structuredClone(snapshot[field]);
+    }
+    // @ts-ignore
+    building[field] = snapshot[field];
+  }
+  building.components.forEach((comp) => comp.onDelta(snapshot));
 }
 
 export function createClientBuilding(

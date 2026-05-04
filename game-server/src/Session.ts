@@ -63,9 +63,9 @@ export default class Session {
 
   async sendDatagramJSON(snapshot: any) {
     try {
-      await this.session.sendDatagram(
-        new TextEncoder().encode(JSON.stringify(snapshot)),
-      );
+      const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+      console.log("size", bytes);
+      await this.session.sendDatagram(bytes);
     } catch (err) {
       console.log("Error while trying to send datagram", err);
     }
@@ -83,7 +83,7 @@ export default class Session {
       );
       const view = new DataView(buffer.buffer);
       view.setUint16(0, result.written, false);
-
+      console.log("sending stream of length", result.written);
       await this.stream.write(buffer.subarray(0, 2 + result.written));
     } catch (err) {
       console.log("Error while trying to send stream", err);
@@ -92,10 +92,13 @@ export default class Session {
 }
 
 export class ReadStream {
-  private firstPacket = true;
+  private newPacket = true;
   private messageLength = 0;
   private readonly buffer = new Uint8Array(65536); // Pre-allocate max size
+  private packetLength = new Uint8Array(2);
+  private packetlengthAt = 0;
   private writePos = 0;
+  private chunkAt = 0;
 
   constructor(
     dataReader: ReadableStreamDefaultReader<Uint8Array<ArrayBufferLike>>,
@@ -113,47 +116,85 @@ export class ReadStream {
     while (true) {
       const { done, value: chunk } = await dataReader.read(); // New bytes!
       if (done) break;
+      this.chunkAt = 0;
+      while (this.chunkAt < chunk.length) {
+        if (this.newPacket) {
+          if (this.packetlengthAt == 0) {
+            if (this.chunkAt + 1 < chunk.length) {
+              // fine
+              this.newPacket = false;
+              this.packetLength[0] = chunk[this.chunkAt];
+              this.packetLength[1] = chunk[this.chunkAt + 1];
+              this.messageLength = this.readStreamPayloadLength(
+                this.packetLength,
+              );
+              this.chunkAt += 2;
+            } else {
+              this.packetLength[0] = chunk[this.chunkAt];
+              this.chunkAt += 1;
+              this.packetlengthAt = 1;
+            }
+          } else if (this.packetlengthAt == 1) {
+            // fine
+            this.packetLength[1] = chunk[this.chunkAt];
+            this.newPacket = false;
+            this.messageLength = this.readStreamPayloadLength(
+              this.packetLength,
+            );
+            this.packetlengthAt = 0;
+            this.chunkAt == 1;
+          } else {
+            console.log("impossible case 2");
+          }
+        } else {
+          if (
+            chunk.length - this.chunkAt <
+            this.messageLength - this.writePos
+          ) {
+            // bytes left to read in chunk
+            this.buffer.set(
+              chunk.subarray(this.chunkAt, chunk.length),
+              this.writePos,
+            );
+            this.writePos += chunk.length - this.chunkAt;
+            this.chunkAt = chunk.length;
+          } else {
+            this.buffer.set(
+              chunk.subarray(
+                this.chunkAt,
+                this.chunkAt + (this.messageLength - this.writePos),
+              ),
+              this.writePos,
+            );
+            this.chunkAt += this.messageLength - this.writePos;
+            this.writePos += this.messageLength - this.writePos;
+          }
 
-      if (this.firstPacket) {
-        this.firstPacket = false;
-        this.messageLength = this.readStreamPayloadLength(chunk);
-        if (this.messageLength < 2) {
           console.log(
-            "Protocol not respected, the initial chunk of the message must have the two first bytes set to the length of the message",
+            "stream data " +
+              this.writePos +
+              "/" +
+              this.messageLength.toString(),
+          );
+        }
+
+        // Check if message is finished
+        if (this.writePos > this.messageLength) {
+          console.log(
+            "Protocol not respected, message is too long, it does not correspond to the said length",
+            "writepos: ",
+            this.writePos,
+            "messsage length: ",
+            this.messageLength,
           );
           break;
         }
+        if (this.writePos == this.messageLength) {
+          this.newPacket = true;
+          this.writePos = 0;
 
-        this.buffer.set(chunk.subarray(2), this.writePos);
-        this.writePos += chunk.length - 2;
-
-        console.log(
-          "new stream data " +
-            this.writePos +
-            "/" +
-            this.messageLength.toString(),
-        );
-      } else {
-        this.buffer.set(chunk, this.writePos);
-        this.writePos += chunk.length;
-
-        console.log(
-          "stream data " + this.writePos + "/" + this.messageLength.toString(),
-        );
-      }
-
-      // Check if message is finished
-      if (this.writePos > this.messageLength) {
-        console.log(
-          "Protocol not respected, message is too long, it does not correspond to the said length",
-        );
-        break;
-      }
-      if (this.writePos == this.messageLength) {
-        this.firstPacket = true;
-        this.writePos = 0;
-
-        this.payloadCallback(this.buffer.subarray(0, this.messageLength));
+          this.payloadCallback(this.buffer.subarray(0, this.messageLength));
+        }
       }
     }
   }

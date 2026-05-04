@@ -9,6 +9,7 @@ const serverBuildingsMap = await loadMap(
   "/home/asus/Documents/Etudes Info L2/Dev web/Projet web/game-server/src/maps/map1/testmap1.tmj",
   [
     "/home/asus/Documents/Etudes Info L2/Dev web/Projet web/game-server/src/maps/map1/naturaltilseset1.tsj",
+    "/home/asus/Documents/Etudes Info L2/Dev web/Projet web/game-server/src/maps/map1/new_natural_tiles.tsj",
   ],
 );
 
@@ -25,6 +26,7 @@ function update() {
   if (playerSessions.size > 0) {
     playerSessions.forEach((session) => {
       if (!players.get("playerIDDB")?.session) {
+        console.log("init player");
         players
           .get("playerIDDB")
           ?.linkSession(
@@ -60,5 +62,5 @@ function update() {
   });
   tick++;
 }
-setInterval(update, 2000);
+setInterval(update, 500);
 console.log("updated");

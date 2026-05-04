@@ -40,7 +40,7 @@ export default class buildingsDeltaBuilder {
       }
       for (const dirtyChunks of this.allDirtyChunks.slice(
         startingTickSnapshot > allDirtyChunksAt ? 0 : startingTickSnapshot,
-        allDirtyChunksAt,
+        allDirtyChunksAt + 1,
       )) {
         this.addNewSnapshot(dirtyChunks);
         totalDirtyTicks++;
@@ -50,6 +50,7 @@ export default class buildingsDeltaBuilder {
       this.addNewSnapshot(this.allDirtyChunks[allDirtyChunksAt]);
       totalDirtyTicks++;
     }
+    console.log("snapshot", tickNumber, this.ackedTick, totalDirtyTicks);
 
     if (totalDirtyTicks > 1) {
       console.log(
@@ -63,6 +64,7 @@ export default class buildingsDeltaBuilder {
       tickNumber - this.ackedTick - 1,
       "ticks behind",
     );
+    return false;
   }
 
   private addNewSnapshot(dirtyChunks: DirtyBuildingChunkType[][]) {

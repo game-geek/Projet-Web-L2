@@ -9,11 +9,9 @@ export default class RenderStatic implements Component {
     private scene: Phaser.Scene,
   ) {
     console.log("sprite");
-    this.sprite = scene.add.sprite(
-      building.x * 32,
-      building.y * 32,
-      building.variant,
-    );
+    this.sprite = scene.add
+      .sprite(building.x * 32, building.y * 32, building.variant)
+      .setOrigin(0, 0);
   }
 
   onDelta(delta: Partial<Record<DeltaField, any>>) {
