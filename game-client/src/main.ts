@@ -3,9 +3,10 @@ import "./connectionUI";
 import StartGame from "./game/main";
 import { closeConnectionUI, openConnectionUI } from "./connectionUI";
 import "./global.css";
+import gameManager from "./game/gameManager";
 
-let GAME = null;
-let SERVER = new ServerCommunication();
+let server = new ServerCommunication();
+let gameManagerInstance = new gameManager(server);
 
 document.addEventListener("DOMContentLoaded", () => {
   // auto connect to server for debug purposes: until auth is implemented
@@ -14,9 +15,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 export async function start(gameServerURl: string) {
   try {
-    await SERVER.initConnection(gameServerURl);
+    await server.initConnection(gameServerURl);
     closeConnectionUI();
-    GAME = StartGame("game-container");
+    const game = StartGame("game-container");
+    game.events.once("ready", () => {
+      game.scene.start("Game", {
+        gameManagerInstance,
+      });
+    });
   } catch (err) {
     console.error(`Could not connect to game with url '${gameServerURl}`);
     openConnectionUI();

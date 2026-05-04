@@ -1,12 +1,10 @@
 import { ServerSession } from "@webtransport-bun/webtransport";
-import { AnyBuildingSnapshot } from "./buildings/buildings";
-import deltaBuilder from "./DeltaBuilder";
-import Player from "./Player";
+import * as z from "zod";
 
 export default class Session {
   private readStreamManager: ReadStream | undefined;
-  public latestDatagrams = null;
-  public incomingStreams = new Set();
+  public incomingDatagrams: Set<any> = new Set();
+  public incomingStreams: Set<any> = new Set();
   private stream:
     | WritableStreamDefaultWriter<Uint8Array<ArrayBufferLike>>
     | undefined;
@@ -43,42 +41,57 @@ export default class Session {
   async newStreamPayload(stream: Uint8Array<ArrayBufferLike>) {
     try {
       const json = JSON.parse(new TextDecoder().decode(stream));
+      console.log(this.incomingStreams);
       this.incomingStreams.add(json);
-      console.log("new datagram payload: ", json);
+      console.log("new stream payload: ", json);
     } catch (err) {
-      console.log("new datagram payload: Invalid datagram: must be JSON");
+      console.log("new stream payload: Invalid stream: must be JSON bytes");
     }
   }
 
   async newDatagramPaylodad(datagram: Uint8Array<ArrayBufferLike>) {
     try {
-      this.latestDatagrams = JSON.parse(new TextDecoder().decode(datagram));
-      console.log("new datagram payload: ", this.latestDatagrams);
+      const json = JSON.parse(new TextDecoder().decode(datagram));
+      this.incomingDatagrams.add(json);
+      console.log("new datagram payload: ");
     } catch (err) {
-      console.log("new datagram payload: Invalid datagram: must be JSON");
+      console.log("new datagram payload: Invalid datagram: must be JSON", err);
     }
   }
 
   async disconnection() {}
 
-  async sendDatagramJSON(snapshot: {
-    [id: number]: Partial<AnyBuildingSnapshot>;
-  }) {
-    console.log(snapshot);
-    await this.session.sendDatagram(
-      new TextEncoder().encode(JSON.stringify(snapshot)),
-    );
+  async sendDatagramJSON(snapshot: any) {
+    try {
+      await this.session.sendDatagram(
+        new TextEncoder().encode(JSON.stringify(snapshot)),
+      );
+    } catch (err) {
+      console.log("Error while trying to send datagram", err);
+    }
   }
 
-  async sendStreamJSON(snapshot: { [id: number]: AnyBuildingSnapshot }) {
+  async sendStreamJSON(snapshot: any) {
     if (!this.stream) return console.log("There is no writable stream...");
-    console.log(snapshot);
+    console.log("sending stream to client");
+    try {
+      const encoder = new TextEncoder();
+      const buffer = new Uint8Array(65536);
+      const result = encoder.encodeInto(
+        JSON.stringify(snapshot),
+        buffer.subarray(2),
+      );
+      const view = new DataView(buffer.buffer);
+      view.setUint16(0, result.written, false);
 
-    await this.stream.write(new TextEncoder().encode(JSON.stringify(snapshot)));
+      await this.stream.write(buffer.subarray(0, 2 + result.written));
+    } catch (err) {
+      console.log("Error while trying to send stream", err);
+    }
   }
 }
 
-class ReadStream {
+export class ReadStream {
   private firstPacket = true;
   private messageLength = 0;
   private readonly buffer = new Uint8Array(65536); // Pre-allocate max size

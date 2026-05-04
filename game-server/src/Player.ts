@@ -1,14 +1,35 @@
-import { DirtyChunkType } from "./buildings/buildings";
+import {
+  AnyServerBuilding,
+  DirtyBuildingChunkType,
+} from "./buildings/buildings";
 import { CHUNK_HEIGHT, CHUNK_WIDTH } from "./buildings/globals";
-import deltaBuilder from "./DeltaBuilder";
 import Session from "./Session";
+import buildingsDeltaBuilder from "./buildings/buildingDeltaBuilder";
+import buildingsSnapshotBuilder from "./buildings/buildingsSnapshotBuilder";
+import entitiesDeltaBuilder from "./entities/entitiesDeltaBuilder";
+import entitiesSnapshotBuilder from "./entities/entitiesSnapshotBuilder";
+import { AnyServerEntity, DirtyEntityChunkType } from "./entities/entities";
+import * as z from "zod";
 
 type ViewAreaType = { x: number; y: number; width: number; height: number };
+
+const IncomingDatagramSchema = z.object({
+  t: z.number(),
+  ack: z.number(),
+});
+type Datagramtype = z.input<typeof IncomingDatagramSchema>;
 
 export default class Player {
   public chunks: [number, number][] = [];
   public session: Session | null = null;
-  public deltaBuilder: deltaBuilder | null = null;
+  public buildingsDeltaBuilder: buildingsDeltaBuilder | null = null;
+  public buildingsSnapshotBuilder: buildingsSnapshotBuilder | null = null;
+  public entitiesDeltaBuilder: entitiesDeltaBuilder | null = null;
+  public entitiesSnapshotBuilder: entitiesSnapshotBuilder | null = null;
+  private clientTick = 0;
+
+  private bs = -1;
+  private es = -1;
 
   constructor(public ViewArea: ViewAreaType) {
     this.updateChunkView();
@@ -36,22 +57,187 @@ export default class Player {
     }
   }
 
-  linkSession(session: Session, allDirtyChunks: DirtyChunkType[][][]) {
+  linkSession(
+    session: Session,
+    allBuildingDirtyChunks: DirtyBuildingChunkType[][][],
+    buildings: (AnyServerBuilding | null)[][],
+    allEntityDirtyChunks: DirtyEntityChunkType[][][],
+    entityChunks: Set<AnyServerEntity>[][],
+  ) {
     if (this.session) {
       // error there should only be one session (kill the other ?)
     }
     this.session = session;
-    this.deltaBuilder = new deltaBuilder(this, allDirtyChunks, this.chunks);
+    this.buildingsDeltaBuilder = new buildingsDeltaBuilder(
+      allBuildingDirtyChunks,
+      this.chunks,
+    );
+    this.buildingsSnapshotBuilder = new buildingsSnapshotBuilder(
+      this,
+      buildings,
+      this.chunks,
+    );
+    this.entitiesDeltaBuilder = new entitiesDeltaBuilder(
+      allEntityDirtyChunks,
+      this.chunks,
+    );
+    this.entitiesSnapshotBuilder = new entitiesSnapshotBuilder(
+      this,
+      entityChunks,
+      this.chunks,
+    );
   }
 
-  createDelta(tick: number, allDirtyChunksAt: number) {
-    if (!this.deltaBuilder || !this.session) return;
+  createDelta(
+    tick: number,
+    allBuildingDirtyChunksAt: number,
+    allBEntityDirtyChunksAt: number,
+  ) {
+    if (
+      !this.buildingsDeltaBuilder ||
+      !this.entitiesDeltaBuilder ||
+      !this.buildingsSnapshotBuilder ||
+      !this.entitiesSnapshotBuilder ||
+      !this.session
+    )
+      return;
 
-    this.deltaBuilder.tick(tick, allDirtyChunksAt);
+    if (this.buildingsDeltaBuilder.tick(tick, allBuildingDirtyChunksAt))
+      this.createBuildingSnapshot(tick);
+    if (this.entitiesDeltaBuilder.tick(tick, allBEntityDirtyChunksAt))
+      this.createEntitySnapshot(tick);
   }
 
-  sendDelta() {
-    if (!this.deltaBuilder || !this.session) return;
-    this.session.sendDatagramJSON(this.deltaBuilder.snapshot);
+  processStreams() {
+    if (!this.session) return;
+    if (this.session.incomingStreams.size == 0) return;
+    for (const stream of this.session.incomingStreams) {
+      this.session.incomingStreams.delete(stream);
+    }
+  }
+
+  processDatagrams() {
+    if (!this.session) return;
+    if (this.session.incomingDatagrams.size == 0) return;
+    const parsedDatagrams = [];
+    for (const datagram of this.session.incomingDatagrams) {
+      try {
+        parsedDatagrams.push(IncomingDatagramSchema.parse(datagram));
+      } catch {
+        console.log("Found an invalid datagram payload schema, dropping it");
+      }
+      this.session.incomingDatagrams.delete(datagram);
+    }
+
+    if (parsedDatagrams.length == 0) return;
+    let latestDatagramIndex = 0;
+    parsedDatagrams.forEach((dg, i) =>
+      dg.t > latestDatagramIndex ? (latestDatagramIndex = i) : null,
+    );
+    this.applyDatagram(parsedDatagrams[latestDatagramIndex]);
+  }
+  applyDatagram(datagram: Datagramtype) {
+    if (!this.buildingsDeltaBuilder || !this.entitiesDeltaBuilder) return;
+    if (datagram.t < this.clientTick)
+      return console.log("dropped old datagram");
+    this.buildingsDeltaBuilder.ack(datagram.ack);
+    this.entitiesDeltaBuilder.ack(datagram.ack);
+  }
+
+  createBuildingSnapshot(tick: number) {
+    if (
+      !this.buildingsDeltaBuilder ||
+      !this.entitiesDeltaBuilder ||
+      !this.buildingsSnapshotBuilder ||
+      !this.entitiesSnapshotBuilder ||
+      !this.session
+    )
+      return;
+    if (this.bs == tick) return;
+    this.buildingsSnapshotBuilder.createSnapshot();
+    this.bs = tick;
+  }
+  createEntitySnapshot(tick: number) {
+    if (
+      !this.buildingsDeltaBuilder ||
+      !this.entitiesDeltaBuilder ||
+      !this.buildingsSnapshotBuilder ||
+      !this.entitiesSnapshotBuilder ||
+      !this.session
+    )
+      return;
+    if (this.es == tick) return;
+    this.entitiesSnapshotBuilder.createSnapshot();
+    this.es = tick;
+  }
+  createSnapshot(tick: number) {
+    if (
+      !this.buildingsDeltaBuilder ||
+      !this.entitiesDeltaBuilder ||
+      !this.buildingsSnapshotBuilder ||
+      !this.entitiesSnapshotBuilder ||
+      !this.session
+    )
+      return;
+    this.createBuildingSnapshot(tick);
+    this.createEntitySnapshot(tick);
+  }
+
+  sendDelta(tick: number) {
+    if (
+      !this.buildingsDeltaBuilder ||
+      !this.entitiesDeltaBuilder ||
+      !this.buildingsSnapshotBuilder ||
+      !this.entitiesSnapshotBuilder ||
+      !this.session
+    )
+      return;
+
+    if (this.bs == tick && this.es == tick) {
+    } else if (this.bs == tick) {
+      this.session.sendDatagramJSON({
+        t: tick,
+        ed: this.entitiesDeltaBuilder.snapshot,
+      });
+    } else if (this.es == tick) {
+      this.session.sendDatagramJSON({
+        t: tick,
+        bd: this.buildingsDeltaBuilder.snapshot,
+      });
+    } else {
+      this.session.sendDatagramJSON({
+        t: tick,
+        bd: this.buildingsDeltaBuilder.snapshot,
+        ed: this.entitiesDeltaBuilder.snapshot,
+      });
+    }
+  }
+
+  sendSnapshot(tick: number) {
+    if (
+      !this.buildingsDeltaBuilder ||
+      !this.entitiesDeltaBuilder ||
+      !this.buildingsSnapshotBuilder ||
+      !this.entitiesSnapshotBuilder ||
+      !this.session
+    )
+      return;
+    if (this.bs == tick && this.es == tick) {
+      this.session.sendStreamJSON({
+        t: tick,
+        bs: this.buildingsSnapshotBuilder.snapshot,
+        es: this.entitiesSnapshotBuilder.snapshot,
+      });
+    } else if (this.bs == tick) {
+      this.session.sendStreamJSON({
+        t: tick,
+        bs: this.buildingsSnapshotBuilder.snapshot,
+      });
+    } else if (this.es == tick) {
+      this.session.sendStreamJSON({
+        t: tick,
+        es: this.entitiesSnapshotBuilder.snapshot,
+      });
+    }
   }
 }

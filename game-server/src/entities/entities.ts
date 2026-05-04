@@ -27,7 +27,7 @@ export type EntityDef<K extends EntityKind> = {
   };
 };
 
-export type BuildingSnapshot<K extends EntityKind> = {
+export type EntitySnapshot<K extends EntityKind> = {
   id: number;
   kind: K;
   x: number;
@@ -40,9 +40,22 @@ export type BuildingSnapshot<K extends EntityKind> = {
   customState: Record<string, unknown>;
 };
 
-export class ServerEntity<K extends EntityKind> implements BuildingSnapshot<K> {
+export const EnitiySnapshotFields = [
+  "id",
+  "kind",
+  "x",
+  "y",
+  "w",
+  "h",
+  "hp",
+  "maxHp",
+  "destroyed",
+  "customState",
+] as const;
+
+export class ServerEntity<K extends EntityKind> implements EntitySnapshot<K> {
   private updateFunction: EntitySystemMapOf<K>;
-  public pendingPatch: Partial<BuildingSnapshot<K>> = {};
+  public pendingPatch: Partial<EntitySnapshot<K>> = {};
   public allDirtyChunksAt: number = 0;
 
   constructor(
@@ -57,14 +70,14 @@ export class ServerEntity<K extends EntityKind> implements BuildingSnapshot<K> {
     public destroyed = false,
     public customState: Record<string, unknown>,
     public chunkPositioning: [number, number][] = [],
-    public allDirtyChunks: DirtyChunkType[][][],
+    public allDirtyChunks: DirtyEntityChunkType[][][],
   ) {
     this.updateFunction = EntitySystems[kind];
   }
 
-  markDirty<F extends keyof BuildingSnapshot<K>>(
+  markDirty<F extends keyof EntitySnapshot<K>>(
     fieldName: F,
-    value: BuildingSnapshot<K>[F],
+    value: EntitySnapshot<K>[F],
   ) {
     this.chunkPositioning.forEach(([y, x]) => {
       if (!(this.id in this.allDirtyChunks[this.allDirtyChunksAt][y][x]))
@@ -81,18 +94,17 @@ export class ServerEntity<K extends EntityKind> implements BuildingSnapshot<K> {
   }
 }
 
-export function createBuilding<K extends EntityKind>(
+export function createEntity<K extends EntityKind>(
   kind: K,
   x: number,
   y: number,
   id: number,
   chunkPositioning: [number, number][] = [],
-  allDirtyChunks: DirtyChunkType[][][],
+  allDirtyChunks: DirtyEntityChunkType[][][],
 ) {
   const def = EntityDefs[kind].shared;
   const customDef = EntityDefs[kind].server;
   const customState = customDef.initState();
-  console.log("ID", id);
   return new ServerEntity(
     id,
     kind,
@@ -109,11 +121,14 @@ export function createBuilding<K extends EntityKind>(
   );
 }
 export type AnyServerEntity = ServerEntity<EntityKind>;
-export type AnyEntitySnapshot = BuildingSnapshot<EntityKind>;
-export type DirtyChunkType = { [id: number]: Partial<AnyEntitySnapshot> };
+export type AnyEntitySnapshot = EntitySnapshot<EntityKind>;
+export type DirtyEntityChunkType = { [id: number]: Partial<AnyEntitySnapshot> };
 export class MapEntities {
-  public readonly entities: (AnyServerEntity | null)[][] = [];
-  public readonly allDirtyChunks: DirtyChunkType[][][] = [];
+  public readonly entities: {
+    [id: number]: AnyServerEntity;
+  } = {};
+  public readonly entityChunks: Set<AnyServerEntity>[][] = [];
+  public readonly allDirtyChunks: DirtyEntityChunkType[][][] = [];
   public allDirtyChunksAt = 0;
   public readonly chunkPositioningPerEntity: {
     [id: number]: [number, number][];
@@ -126,15 +141,15 @@ export class MapEntities {
     public readonly mapWidth: number,
     public readonly mapHeight: number,
   ) {
-    // buildings
-    for (let y = 0; y < mapHeight; y++) {
-      this.entities.push([]);
+    // entity chunks
+    for (let y = 0; y < mapHeight; y += this.chunkHeight) {
+      this.entityChunks.push([]);
 
-      for (let x = 0; x < mapWidth; x++) {
-        this.entities[y].push(null);
+      for (let x = 0; x < mapWidth; x += this.chunkWidth) {
+        this.entityChunks[y].push(new Set());
       }
     }
-    // chunks
+    // dirty chunks
     for (let tickSave = 0; tickSave < DIRTY_CHUNKS_TICKS; tickSave++) {
       this.allDirtyChunks.push([]);
       for (let y = 0; y < mapHeight; y += this.chunkHeight) {
@@ -149,130 +164,105 @@ export class MapEntities {
     }
   }
 
-  createAndAddBuilding<K extends EntityKind>(
+  createAndAddEntity<K extends EntityKind>(
     kind: K,
     x: number,
     y: number,
     id: number,
   ) {
     // verify if its position is correct w/ the map and if its a valid position
-    const buildingWidth = EntityDefs[kind].shared.w;
-    const buildingHeight = EntityDefs[kind].shared.h;
+    const entityWidth = EntityDefs[kind].shared.w;
+    const entityHeight = EntityDefs[kind].shared.h;
     if (
       !(
         x >= 0 &&
-        x + buildingWidth < this.mapWidth &&
+        x + entityWidth < this.mapWidth &&
         y >= 0 &&
-        y + buildingHeight < this.mapHeight
+        y + entityHeight < this.mapHeight
       )
     )
       return "Placement out of map";
-    for (let map_y = y; map_y < y + buildingHeight; map_y++) {
-      for (let map_x = x; map_x < x + buildingWidth; map_x++) {
-        if (this.entities[map_y][map_x]) return "Invalid building location";
-      }
-    }
-    for (let map_y = y; map_y < y + buildingHeight; map_y++) {
-      for (let map_x = x; map_x < x + buildingWidth; map_x++) {
-        this.chunkPositioningPerEntity[id] = [];
 
-        if (
-          Math.floor(x / this.chunkWidth) ==
-          Math.floor((x + buildingWidth) / this.chunkWidth)
-        ) {
-          // x axis is on the same chunk!
+    // selecting the right chunks
+    this.chunkPositioningPerEntity[id] = [];
+
+    this.entities[id] = createEntity(
+      kind,
+      x,
+      y,
+      id,
+      this.chunkPositioningPerEntity[id],
+      this.allDirtyChunks,
+    );
+    this.updateEntityChunks(this.entities[id]);
+  }
+
+  updateEntityChunksBasedOnDirty() {
+    const entitiesToUpdate: Set<string> = new Set();
+    for (const dirtyChunkY of this.allDirtyChunks[this.allDirtyChunksAt]) {
+      for (const dirtyChunkX of dirtyChunkY) {
+        for (const dirtyEntityID in dirtyChunkX) {
           if (
-            Math.floor(y / this.chunkWidth) ==
-            Math.floor((y + buildingHeight) / this.chunkHeight)
+            "x" in dirtyChunkX[dirtyEntityID] ||
+            "y" in dirtyChunkX[dirtyEntityID] ||
+            "w" in dirtyChunkX[dirtyEntityID] ||
+            "h" in dirtyChunkX[dirtyEntityID]
           ) {
-            // y axis is on the same chunk!
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor(y / this.chunkWidth),
-              Math.floor(x / this.chunkWidth),
-            ]);
-          } else {
-            // two diferent y axis chunks ...
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor(y / this.chunkWidth),
-              Math.floor(x / this.chunkWidth),
-            ]);
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor((y + buildingHeight) / this.chunkWidth),
-              Math.floor(x / this.chunkWidth),
-            ]);
-          }
-        } else {
-          // two different x axis chunks
-          if (
-            Math.floor(y / this.chunkWidth) ==
-            Math.floor((y + buildingHeight) / this.chunkHeight)
-          ) {
-            // y axis is on the same chunk!
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor(y / this.chunkWidth),
-              Math.floor(x / this.chunkWidth),
-            ]);
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor(y / this.chunkWidth),
-              Math.floor((x + buildingWidth) / this.chunkWidth),
-            ]);
-          } else {
-            // two diferent y axis chunks and x axis chunks ...
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor(y / this.chunkWidth),
-              Math.floor(x / this.chunkWidth),
-            ]);
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor((y + buildingHeight) / this.chunkWidth),
-              Math.floor(x / this.chunkWidth),
-            ]);
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor(y / this.chunkWidth),
-              Math.floor(x / this.chunkWidth),
-            ]);
-            this.chunkPositioningPerEntity[id].push([
-              Math.floor((y + buildingHeight) / this.chunkWidth),
-              Math.floor(x / this.chunkWidth),
-            ]);
+            entitiesToUpdate.add(dirtyEntityID);
           }
         }
-
-        this.entities[map_y][map_x] = createBuilding(
-          kind,
-          x,
-          y,
-          id,
-          this.chunkPositioningPerEntity[id],
-          this.allDirtyChunks,
-        );
       }
+    }
+    for (const entityID of entitiesToUpdate) {
+      // @ts-ignore
+      this.updateEntityChunks(this.entities[entityID]);
     }
   }
 
-  updateBuildings(dt: number) {
-    for (let y = 0; y < this.mapHeight; y++) {
-      for (let x = 0; x < this.mapWidth; x++) {
-        this.entities[y][x]?.update(dt, this.allDirtyChunksAt);
+  updateEntityChunks(entity: AnyServerEntity) {
+    for (const [chunkY, chunkX] of this.chunkPositioningPerEntity[entity.id]) {
+      this.entityChunks[chunkY][chunkX].delete(entity);
+    }
+    this.chunkPositioningPerEntity[entity.id] = [];
+    for (
+      let chunk_y = Math.floor(entity.y / CHUNK_HEIGHT);
+      chunk_y < Math.ceil((entity.y + entity.h) / CHUNK_HEIGHT);
+      chunk_y += 1
+    ) {
+      for (
+        let chunk_x = Math.floor(entity.x / CHUNK_WIDTH);
+        chunk_x < Math.ceil((entity.x + entity.w) / CHUNK_WIDTH);
+        chunk_x += 1
+      ) {
+        this.chunkPositioningPerEntity[entity.id].push([chunk_y, chunk_x]);
       }
     }
+
+    for (const [chunkY, chunkX] of this.chunkPositioningPerEntity[entity.id]) {
+      this.entityChunks[chunkY][chunkX].add(entity);
+    }
+  }
+
+  updateEntities(dt: number) {
+    this.allDirtyChunksAt = (this.allDirtyChunksAt + 1) % DIRTY_CHUNKS_TICKS;
+    for (const entityID in this.entities) {
+      this.entities[entityID].update(dt, this.allDirtyChunksAt);
+    }
+    this.updateEntityChunksBasedOnDirty();
   }
   _displayDebugMap() {
     console.log("[DEBUG] Class ", this.constructor.name, "buildings");
-    for (let y = 0; y < this.mapHeight; y++) {
-      let line = "";
-      for (let x = 0; x < this.mapWidth; x++) {
-        let b = this.entities[y][x];
-        line +=
-          b != null ? b?.kind.padEnd(20, "_").slice(0, 20) : "".padEnd(20, "_");
-        line += "  ";
+    for (const chunkY of this.entityChunks) {
+      for (const chunkX of chunkY) {
+        let line = `Chunk[${chunkY}][${chunkX}] = `;
+        for (const entity of chunkX) {
+          entity != null
+            ? entity?.kind.padEnd(20, "_").slice(0, 20)
+            : "".padEnd(20, "_");
+          line += "  ";
+        }
+        console.log(line);
       }
-      console.log(line);
     }
   }
 }
-// export function tickBuilding<K extends BuildingKind>(
-//   building: ServerBuildingOf<K>,
-//   dt: number,
-// ) {
-//   building.update(dt);
-// }

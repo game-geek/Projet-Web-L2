@@ -1,12 +1,22 @@
 import { Scene } from "phaser";
+import serverCommunication from "../../serverCommunication";
+import gameManager from "../gameManager";
 
 export class Game extends Scene {
   camera: Phaser.Cameras.Scene2D.Camera;
   background: Phaser.GameObjects.Image;
   msg_text: Phaser.GameObjects.Text;
 
+  gameManager: gameManager | null = null;
+
   constructor() {
     super("Game");
+  }
+
+  init({ gameManagerInstance }: { gameManagerInstance: gameManager }) {
+    this.gameManager = gameManagerInstance;
+    this.gameManager.init(this);
+    console.log("game initialized");
   }
 
   create() {
@@ -30,5 +40,9 @@ export class Game extends Scene {
       },
     );
     this.msg_text.setOrigin(0.5);
+  }
+  update(time: number, delta: number): void {
+    if (!this.gameManager) return;
+    this.gameManager.update();
   }
 }

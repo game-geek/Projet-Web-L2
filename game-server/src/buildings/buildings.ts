@@ -34,6 +34,20 @@ export type BuildingDef<K extends BuildingKind> = {
   };
 };
 
+export const BuildingSnapshotFields = [
+  "id",
+  "kind",
+  "variant",
+  "x",
+  "y",
+  "w",
+  "h",
+  "hp",
+  "maxHp",
+  "destroyed",
+  "customState",
+] as const;
+
 export type BuildingSnapshot<K extends BuildingKind> = {
   id: number;
   kind: K;
@@ -68,7 +82,7 @@ export class ServerBuilding<
     public destroyed = false,
     public customState: Record<string, unknown>,
     public chunkPositioning: [number, number][] = [],
-    public allDirtyChunks: DirtyChunkType[][][],
+    public allDirtyChunks: DirtyBuildingChunkType[][][],
   ) {
     this.updateFunction = BuildingSystems[kind];
   }
@@ -99,12 +113,11 @@ export function createBuilding<K extends BuildingKind>(
   y: number,
   id: number,
   chunkPositioning: [number, number][] = [],
-  allDirtyChunks: DirtyChunkType[][][],
+  allDirtyChunks: DirtyBuildingChunkType[][][],
 ) {
   const def = BuildingDefs[kind].shared;
   const customDef = BuildingDefs[kind].server;
   const customState = customDef.initState();
-  console.log("ID", id);
   return new ServerBuilding(
     id,
     kind,
@@ -123,10 +136,12 @@ export function createBuilding<K extends BuildingKind>(
 }
 export type AnyServerBuilding = ServerBuilding<BuildingKind>;
 export type AnyBuildingSnapshot = BuildingSnapshot<BuildingKind>;
-export type DirtyChunkType = { [id: number]: Partial<AnyBuildingSnapshot> };
+export type DirtyBuildingChunkType = {
+  [id: number]: Partial<AnyBuildingSnapshot>;
+};
 export class MapBuildings {
   public readonly buildings: (AnyServerBuilding | null)[][] = [];
-  public readonly allDirtyChunks: DirtyChunkType[][][] = [];
+  public readonly allDirtyChunks: DirtyBuildingChunkType[][][] = [];
   public allDirtyChunksAt = 0;
   public readonly chunkPositioningPerBuilding: {
     [id: number]: [number, number][];
@@ -265,6 +280,7 @@ export class MapBuildings {
   }
 
   updateBuildings(dt: number) {
+    this.allDirtyChunksAt = (this.allDirtyChunksAt + 1) % DIRTY_CHUNKS_TICKS;
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
         this.buildings[y][x]?.update(dt, this.allDirtyChunksAt);

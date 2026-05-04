@@ -1,3 +1,4 @@
+import Eliptae from "./Eliptae";
 import { EntityDef, EntityKind, ServerEntity } from "./entities";
 
 // the default data related to those buildings
@@ -35,5 +36,5 @@ export type EntitySystemMap = {
 export type EntitySystemMapOf<K extends EntityKind> = EntitySystemMap[K];
 
 export const EntitySystems: EntitySystemMap = {
-  eliptae: (e, dt) => {},
+  eliptae: Eliptae,
 } as const;

@@ -1,26 +1,31 @@
-import {
-  AnyBuildingSnapshot,
-  AnyServerBuilding,
-  DirtyChunkType,
-} from "./buildings/buildings";
-import { DIRTY_CHUNKS_TICKS } from "./buildings/globals";
+import { DirtyBuildingChunkType } from "./buildings";
+import { DIRTY_CHUNKS_TICKS } from "./globals";
 
-import Player from "./Player";
-
-export default class deltaBuilder {
+export default class buildingsDeltaBuilder {
   private ackedTick = 0;
   private needRebuild = false;
-  public snapshot: DirtyChunkType = {};
+  public snapshot: DirtyBuildingChunkType = {};
 
   constructor(
-    public player: Player,
-    public allDirtyChunks: DirtyChunkType[][][],
+    public allDirtyChunks: DirtyBuildingChunkType[][][],
     public chunks: [number, number][],
   ) {}
 
   tick(tickNumber: number, allDirtyChunksAt: number) {
-    console.log("start", this.allDirtyChunks[0]);
+    // check if we didn't go over the max ticks behind
+    if (tickNumber - this.ackedTick > DIRTY_CHUNKS_TICKS) {
+      console.log(
+        "Buildings delta: passed the ",
+        DIRTY_CHUNKS_TICKS,
+        "max ticks behind, sending a full buildings snapshot",
+      );
+      // send snapshot and reset ackedTick
+      this.ack(tickNumber);
+      return true;
+    }
+    let totalDirtyTicks = 0;
     if (this.needRebuild) {
+      this.snapshot = {};
       const startingTickSnapshot = (this.ackedTick + 1) % DIRTY_CHUNKS_TICKS;
       for (
         let i =
@@ -31,20 +36,36 @@ export default class deltaBuilder {
         i++
       ) {
         this.addNewSnapshot(this.allDirtyChunks[i]);
+        totalDirtyTicks++;
       }
       for (const dirtyChunks of this.allDirtyChunks.slice(
         startingTickSnapshot > allDirtyChunksAt ? 0 : startingTickSnapshot,
         allDirtyChunksAt,
       )) {
         this.addNewSnapshot(dirtyChunks);
+        totalDirtyTicks++;
       }
+      this.needRebuild = false;
     } else {
       this.addNewSnapshot(this.allDirtyChunks[allDirtyChunksAt]);
+      totalDirtyTicks++;
     }
-    console.log("end", this.snapshot);
+
+    if (totalDirtyTicks > 1) {
+      console.log(
+        "Buildings delta: rebuild occurred, with",
+        totalDirtyTicks,
+        "ticks of dirtyChunks accessed",
+      );
+    }
+    console.log(
+      "Buildings delta:",
+      tickNumber - this.ackedTick - 1,
+      "ticks behind",
+    );
   }
 
-  private addNewSnapshot(dirtyChunks: DirtyChunkType[][]) {
+  private addNewSnapshot(dirtyChunks: DirtyBuildingChunkType[][]) {
     for (const [chunkY, chunkX] of this.chunks) {
       let dirtyChunk = dirtyChunks[chunkY][chunkX];
       for (const buildingID in dirtyChunk) {
@@ -77,6 +98,7 @@ export default class deltaBuilder {
   }
 
   ack(ticknumber: number) {
+    if (ticknumber < this.ackedTick) return;
     this.needRebuild = true;
     this.ackedTick = ticknumber;
   }

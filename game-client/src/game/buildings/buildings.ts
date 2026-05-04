@@ -5,51 +5,52 @@ import {
   BuildingVariantMap,
 } from "../../../../game-server/src/buildings/buildings";
 import { BuildingDefs } from "../../../../game-server/src/buildings/globals";
-import { DeltaField } from "./Components";
-interface Component {
-  onAttach?(): void;
-  update?(dt: number): void;
-}
-type ComponentCtor<T extends Component = Component> = new () => T;
+import RenderStatic from "./RenderStatic";
 
-const ComponentRegistry: Record<string, ComponentCtor> = {};
+export type DeltaField =
+  | "hp"
+  | "maxHp"
+  | "x"
+  | "y"
+  | "w"
+  | "h"
+  | "customState.repairProgress";
 
-class Transform {
-  public x: number;
-  public y: number;
-  public w: number;
-  public h: number;
+export type Component = {
+  onDelta: (delta: Partial<Record<DeltaField, any>>) => void;
+  update: (dt: number) => void;
+};
 
-  constructor(x: number, y: number, width: number, height: number) {
-    this.x = x;
-    this.y = y;
-    this.w = width;
-    this.h = height;
-  }
-}
-
+const componentRegistry = {
+  RenderStatic: RenderStatic,
+};
 export class ClientBuilding<K extends BuildingKind> {
-  public components: Record<string, Component> = {};
+  public components: Component[] = [];
   public deltaFieldsSub: Partial<Record<DeltaField, Set<string>>> = {};
 
   constructor(
     public id: number,
     public kind: K,
     public variant: BuildingVariantMap[K],
-    public transform: Transform,
+    public x: number,
+    public y: number,
+    public w: number,
+    public h: number,
     public hp: number,
     public maxHp: number,
     public destroyed: boolean,
     public customState: Record<number, unknown>,
   ) {}
 
-  addComponent(componentName: string, component: Component) {
-    this.components[componentName] = component;
+  addComponent(component: Component) {
+    this.components.push(component);
   }
 }
 
 export class MapBuildings {
   public readonly buildingsMap: (ClientBuilding<BuildingKind> | null)[][] = [];
+  public readonly buildings: Map<number, ClientBuilding<BuildingKind>> =
+    new Map();
 
   constructor(
     public readonly width: number,
@@ -64,45 +65,29 @@ export class MapBuildings {
   }
 
   addBuilding(building: ClientBuilding<BuildingKind>) {
-    if (!building.transform) return "Building is not a Transformable";
-
     // verify if its position is correct w/ the map and if its a valid position
     if (
       !(
-        building.transform.x >= 0 &&
-        building.transform.x + building.transform.w < this.width &&
-        building.transform.y >= 0 &&
-        building.transform.y + building.transform.h < this.height
+        building.x >= 0 &&
+        building.x + building.w < this.width &&
+        building.y >= 0 &&
+        building.y + building.h < this.height
       )
     )
       return "Placement out of map";
-    for (
-      let y = building.transform.y;
-      y < building.transform.y + building.transform.h;
-      y++
-    ) {
-      for (
-        let x = building.transform.x;
-        x < building.transform.x + building.transform.w;
-        x++
-      ) {
+    for (let y = building.y; y < building.y + building.h; y++) {
+      for (let x = building.x; x < building.x + building.w; x++) {
         if (this.buildingsMap[y][x])
-          return "Invalid building.transform location";
+          // return "Invalid building location";
+          console.log("warning: a building alwready exists in that location");
       }
     }
-    for (
-      let y = building.transform.y;
-      y < building.transform.y + building.transform.h;
-      y++
-    ) {
-      for (
-        let x = building.transform.x;
-        x < building.transform.x + building.transform.w;
-        x++
-      ) {
+    for (let y = building.y; y < building.y + building.h; y++) {
+      for (let x = building.x; x < building.x + building.w; x++) {
         this.buildingsMap[y][x] = building;
       }
     }
+    this.buildings.set(building.id, building);
   }
 
   _displayDebugMap() {
@@ -122,25 +107,35 @@ export class MapBuildings {
   }
 }
 
-function createClientBuilding(dto: BuildingSnapshot<BuildingKind>) {
+export function createClientBuilding(
+  dto: BuildingSnapshot<BuildingKind>,
+  scene: Phaser.Scene,
+) {
   const def = BuildingDefs[dto.kind];
 
   const building = new ClientBuilding(
     dto.id,
     dto.kind,
     dto.variant,
-    new Transform(dto.x, dto.y, dto.w, dto.h),
+    dto.x,
+    dto.y,
+    dto.w,
+    dto.h,
     dto.hp,
     dto.maxHp,
     dto.destroyed,
     dto.customState,
   );
 
-  for (const spec of def.client.components) {
-    const Comp = ComponentRegistry[spec];
-    const component = new Comp();
-    building.addComponent(spec, component);
-  }
+  // add components
+
+  def.client.components.forEach((componentName) => {
+    if (componentName in componentRegistry) {
+      // add the component
+      const Comp = componentRegistry[componentName];
+      building.addComponent(new Comp(building, scene));
+    }
+  });
 
   return building;
 }

@@ -2,7 +2,7 @@ import { createServer, WT_STOP_SENDING } from "@webtransport-bun/webtransport";
 import * as fs from "node:fs";
 import Session from "./Session";
 import Player from "./Player";
-import deltaBuilder from "./DeltaBuilder";
+import deltaBuilder from "./buildings/buildingDeltaBuilder";
 import { players } from "./index";
 
 // Dev certs server cert and private key

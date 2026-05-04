@@ -9,31 +9,11 @@ import NaturalWall from "./NaturalWall";
 
 // buildings in the game with their variants
 export const BuildingVariantsMap = {
-  wall: ["top", "left", "right", "bottom"],
   natural_wall: ["1"],
 } as const; // "as const" is needed for the types match PERFECTLY their values, for ex "top" is "top" and not string
 
 // the default data related to those buildings
 export const BuildingDefs = {
-  wall: {
-    shared: { maxHp: 100, destructible: true, w: 1, h: 1 },
-    server: {
-      initState: () => ({
-        ammo: 30,
-        charge: 0,
-        targetId: null as number | null,
-      }),
-    },
-    client: {
-      textures: {
-        top: "wall_top",
-        left: "wall_left",
-        right: "wall_right",
-        bottom: "wall_bottom",
-      },
-      components: ["renderable", "health", "repairable", "solid"] as const,
-    },
-  },
   natural_wall: {
     shared: { maxHp: 300, destructible: true, w: 1, h: 1 },
     server: {
@@ -45,9 +25,9 @@ export const BuildingDefs = {
     },
     client: {
       textures: {
-        "1": "natural_wall_1",
+        "1": "assets/natural-tile.png",
       },
-      components: ["renderable", "health", "solid"] as const,
+      components: ["RenderStatic"] as const,
     },
   },
 } as const satisfies {
@@ -57,6 +37,8 @@ export const BuildingDefs = {
 export const DIRTY_CHUNKS_TICKS = 20;
 export const CHUNK_WIDTH = 64;
 export const CHUNK_HEIGHT = 64;
+export const MAP_WIDTH = 10;
+export const MAP_HEIGHT = 10;
 
 type BuildingSystem<K extends BuildingKind> = (
   building: ServerBuilding<K>,
@@ -70,6 +52,5 @@ export type BuildingSystemMap = {
 export type BuildingSystemMapOf<K extends BuildingKind> = BuildingSystemMap[K];
 
 export const BuildingSystems: BuildingSystemMap = {
-  wall: (building, dt) => {},
   natural_wall: NaturalWall,
 } as const;
