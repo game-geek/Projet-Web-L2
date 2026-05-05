@@ -13,7 +13,7 @@ export default class WebTransportCommunication {
   public readStream: any;
   constructor() {}
 
-  public async connectToGameServer(gameServerUrl: string) {
+  public async connectToGameServer(gameServerUrl: string, userID: string) {
     try {
       this.gameServerURL = gameServerUrl;
       this.ready = false;
@@ -40,14 +40,20 @@ export default class WebTransportCommunication {
 
       let e = async () => {
         await this.transport?.closed;
-        console.log("transport closed");
+        this.transport = null;
+        console.log("[webT] transport closed");
       };
       e();
-      return true;
+      // authenticate
+      return this.auth(userID);
     } catch (err) {
       this.transport = null;
-      return `Error while trying to connect to ${this.gameServerURL}`;
+      return `[WebT] Error while trying to connect to ${this.gameServerURL}`;
     }
+  }
+
+  private async auth(userID: string) {
+    return await this.writeStream({ userID });
   }
 
   private async readDatagramloop(reader: ReadableStreamDefaultReader<any>) {
@@ -66,7 +72,7 @@ export default class WebTransportCommunication {
   }
 
   public async writeStream(stream: any) {
-    if (!this.streamWriter) return;
+    if (!this.streamWriter) return false;
     try {
       const encoder = new TextEncoder();
       const buffer = new Uint8Array(65536);
@@ -76,10 +82,16 @@ export default class WebTransportCommunication {
       );
       const view = new DataView(buffer.buffer);
       view.setUint16(0, result.written, false);
-
+      console.log(
+        "sending authentication request",
+        stream,
+        "size: ",
+        result.written,
+      );
       await this.streamWriter.write(buffer.subarray(0, 2 + result.written));
     } catch (err) {
       console.log("Error while trying to send stream", err);
+      return false;
     }
   }
 

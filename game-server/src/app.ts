@@ -9,7 +9,7 @@ import { players } from "./index";
 const certPem = fs.readFileSync("dev-server.crt", "utf-8");
 const keyPem = fs.readFileSync("dev-server.key", "utf-8");
 
-export const playerSessions: Map<string, Session> = new Map();
+export const newPlayerSessions: Set<Session> = new Set();
 
 const server = createServer({
   port: 4433,
@@ -17,12 +17,6 @@ const server = createServer({
   onSession: async (session) => {
     console.log("Session connected:", session.id, session.peer, session);
 
-    playerSessions.set(session.id, new Session(session));
-
-    void session.closed.then(async () => {
-      console.log("session removed");
-      playerSessions.get(session.id)?.disconnection();
-      playerSessions.delete(session.id);
-    });
+    newPlayerSessions.add(new Session(session));
   },
 });

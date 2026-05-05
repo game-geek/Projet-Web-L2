@@ -12,40 +12,39 @@ document.addEventListener("DOMContentLoaded", () => {
   attemptAutoConnect();
 });
 
-export async function start(gameServerURl: string) {
+export async function start(gameServerURl: string, userID: string) {
   try {
-    await server.initConnection(gameServerURl);
+    await server.initConnection(gameServerURl, userID);
     const game = StartGame("game-container");
   } catch (err) {
     console.error(`Could not connect to game with url '${gameServerURl}`);
-    window.location.replace("/");
+    // window.location.replace("/");
   }
 }
 
 function attemptAutoConnect() {
-  const savedURL = getGameServerURl();
-  console.log(savedURL);
-  if (!savedURL) return window.location.replace("/");
+  const data = getGameData();
+  if (!data) return window.location.replace("/");
 
-  start(savedURL);
+  start(data.url, data.id);
 }
 
 // get previously stored connection URL
-export function getGameServerURl() {
+export function getGameData() {
   console.log(localStorage.getItem("data"));
   if (localStorage.getItem("data")) {
     try {
       //@ts-ignore
       const data = JSON.parse(localStorage.getItem("data"));
-      if (data.url) {
-        return data.url;
+      if (data.url && data.id && data.name) {
+        return data;
       } else {
-        window.location.replace("/");
+        // window.location.replace("/");
       }
     } catch (err) {
-      window.location.replace("/");
+      // window.location.replace("/");
     }
   } else {
-    window.location.replace("/");
+    // window.location.replace("/");
   }
 }

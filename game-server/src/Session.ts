@@ -1,23 +1,38 @@
 import { ServerSession } from "@webtransport-bun/webtransport";
 import * as z from "zod";
 
+const IncomingAuthStream = z.object({
+  userID: z.string(),
+});
+type ClientDatagramtypeType = z.input<typeof IncomingAuthStream>;
+
 export default class Session {
   private readStreamManager: ReadStream | undefined;
   public incomingDatagrams: Set<any> = new Set();
   public incomingStreams: Set<any> = new Set();
+  public userID: string | null = null;
   private stream:
     | WritableStreamDefaultWriter<Uint8Array<ArrayBufferLike>>
     | undefined;
+  public closed = false;
 
   constructor(private session: ServerSession) {
     // collect irt incoming diagrams
+    session.closed.then((e) => {
+      this.closed = true;
+      console.warn("[session] session closed", e.code, e.reason);
+    });
     void (async () => {
       try {
         for await (const datagram of session.incomingDatagrams()) {
           this.newDatagramPaylodad(datagram);
         }
       } catch (err) {
-        console.warn("[server] datagram loop error:", err);
+        this.session.close({
+          reason: "datagram loop error",
+          code: 100,
+        });
+        console.warn("[session] datagram loop error:", err);
       }
     })();
 
@@ -25,30 +40,47 @@ export default class Session {
     const bidiStreamReader = session.incomingBidirectionalStreams.getReader();
 
     (async () => {
-      const { done, value: duplex } = await bidiStreamReader.read(); // Wait for client start of stream
-      if (done) return;
-      this.stream = duplex.writable.getWriter();
+      try {
+        const { done, value: duplex } = await bidiStreamReader.read(); // Wait for client start of stream
+        if (done) return;
+        this.stream = duplex.writable.getWriter();
 
-      const dataReader = duplex.readable.getReader();
+        const dataReader = duplex.readable.getReader();
 
-      this.readStreamManager = new ReadStream(
-        dataReader,
-        this.newStreamPayload,
-        this,
-      );
+        this.readStreamManager = new ReadStream(
+          dataReader,
+          this.newStreamPayload,
+          this,
+        );
+      } catch (err) {
+        this.session.close({
+          reason: "streams setup/loop error",
+          code: 101,
+        });
+        console.warn("[session] streams setup/loop error:", err);
+      }
     })();
+
+    // wait for user to send over its uid
   }
 
   async newStreamPayload(
     stream: Uint8Array<ArrayBufferLike>,
     session: Session | null = null,
   ) {
-    if (!session) return console.log("fatal error in newStreamPlayload");
+    if (!session)
+      return console.log(
+        "[session] fatal JS referencing error in newStreamPlayload",
+      );
+
     try {
       const json = JSON.parse(new TextDecoder().decode(stream));
-      console.log(session.incomingStreams);
-      session.incomingStreams.add(json);
-      console.log("new stream payload: ", json);
+
+      // if authentificated, works as normal
+      if (session.userID) {
+        session.incomingStreams.add(json);
+        console.log("new stream payload: ", json);
+      } else session.auth(json);
     } catch (err) {
       console.log(
         "new stream payload: Invalid stream: must be JSON bytes",
@@ -57,19 +89,37 @@ export default class Session {
     }
   }
 
+  private auth(data: any) {
+    try {
+      const msg = IncomingAuthStream.parse(data);
+      this.userID = msg.userID;
+      console.log("user authenticated");
+      // could call global function to make us join the game
+    } catch (err) {
+      console.log("invalid request from client", err);
+    }
+  }
+
   async newDatagramPaylodad(datagram: Uint8Array<ArrayBufferLike>) {
     try {
       const json = JSON.parse(new TextDecoder().decode(datagram));
-      this.incomingDatagrams.add(json);
-      console.log("new datagram payload: ");
+      if (this.userID) {
+        this.incomingDatagrams.add(json);
+        console.log("new datagram payload: ");
+      }
     } catch (err) {
       console.log("new datagram payload: Invalid datagram: must be JSON", err);
     }
   }
 
-  async disconnection() {}
+  async disconnection() {
+    console.log("[session] closing on demand");
+    this.session.close();
+  }
 
   async sendDatagramJSON(snapshot: any) {
+    if (this.closed)
+      return console.log("[session] can't send datagram because it's closed");
     try {
       const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
       if (bytes.length > 1200) {
@@ -83,6 +133,9 @@ export default class Session {
 
   async sendStreamJSON(snapshot: any) {
     if (!this.stream) return console.log("There is no writable stream...");
+    if (this.closed)
+      return console.log("[session] can't send stream because it's closed");
+
     console.log("sending stream to client");
     try {
       const encoder = new TextEncoder();

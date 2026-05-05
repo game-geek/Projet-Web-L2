@@ -181,9 +181,10 @@ export default class serverCommunication {
   } | null = null;
   public latestActions: Set<ServerStreamtype["a"]> = new Set();
 
-  async initConnection(gameServerURL: string) {
-    const response = await this.webT.connectToGameServer(gameServerURL);
-    if (response !== true)
+  async initConnection(gameServerURL: string, userID: string) {
+    if (!userID) throw new Error("Invalid userID: " + userID);
+    const response = await this.webT.connectToGameServer(gameServerURL, userID);
+    if (response === false)
       throw new Error("Could not connect to game: " + response);
     this.connected = true;
     this.gameServerURl = gameServerURL;

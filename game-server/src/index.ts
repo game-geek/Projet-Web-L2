@@ -1,5 +1,5 @@
 import "./app";
-import { playerSessions } from "./app";
+import { newPlayerSessions } from "./app";
 import { MapEntities } from "./entities/entities";
 import { GLOBAL_INDEX, incrementGlobalIndex, loadMap } from "./loadMap";
 import Player from "./Player";
@@ -18,14 +18,6 @@ const serverEntitiesMap = new MapEntities(
 );
 
 export const players: Map<string, Player> = new Map();
-players.set(
-  "playerIDDB",
-  new Player(
-    { x: 0, y: 0, width: 100, height: 100 },
-    serverBuildingsMap,
-    serverEntitiesMap,
-  ),
-);
 
 const ai = new Player(
   { x: 0, y: 0, width: 100, height: 100 },
@@ -58,27 +50,48 @@ serverBuildingsMap.createAndAddBuilding(
 incrementGlobalIndex();
 
 let tick = 1;
-function update() {
-  if (playerSessions.size > 0) {
-    playerSessions.forEach((session) => {
-      if (!players.get("playerIDDB")?.session) {
-        console.log("init player");
-        players
-          .get("playerIDDB")
-          ?.linkSession(
-            session,
-            serverBuildingsMap.allDirtyChunks,
-            serverBuildingsMap.buildings,
-            serverEntitiesMap.allDirtyChunks,
-            serverEntitiesMap.entityChunks,
-          );
-        players.get("playerIDDB")?.createBuildingSnapshot(tick);
-        players.get("playerIDDB")?.createEntitySnapshot(tick);
-        players.get("playerIDDB")?.createActionsSnapshot(tick);
-        players.get("playerIDDB")?.sendSnapshot(tick);
+const MAX_PLAYERS = 4;
+function checkForNewSessions() {
+  for (const newSession of newPlayerSessions) {
+    if (newSession.userID && players.has(newSession.userID)) {
+      // player rejoining
+      // link new session
+      const p = players.get(newSession.userID);
+      if (!p) {
+        if (players.size >= MAX_PLAYERS) {
+          // player limit reached, make spectator ?
+        }
+        const p = new Player(
+          { x: 0, y: 0, width: 100, height: 100 },
+          serverBuildingsMap,
+          serverEntitiesMap,
+        );
+        players.set(newSession.userID, p);
+        p.setSession(newSession);
+
+        newPlayerSessions.delete(newSession);
+      } else p.setSession(newSession);
+    } else if (newSession.userID) {
+      if (players.size >= MAX_PLAYERS) {
+        // player limit reached, make spectator ?
       }
-    });
+
+      const p = new Player(
+        { x: 0, y: 0, width: 100, height: 100 },
+        serverBuildingsMap,
+        serverEntitiesMap,
+      );
+      players.set(newSession.userID, p);
+      p.setSession(newSession);
+      newPlayerSessions.delete(newSession);
+    }
   }
+  // check if session is alwready link
+}
+
+function update() {
+  checkForNewSessions();
+
   console.log("running", tick);
   // read data from clients and do actions
   //...
@@ -111,5 +124,5 @@ function update() {
   });
   tick++;
 }
-setInterval(update, 100);
+setInterval(update, 500);
 console.log("updated");

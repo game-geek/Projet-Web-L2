@@ -86,6 +86,7 @@ export default class Player {
   private es = -1;
   private bd = -1;
   private ed = -1;
+  public firstConnection = false;
 
   constructor(
     public ViewArea: ViewAreaType,
@@ -93,6 +94,25 @@ export default class Player {
     public entitiesMap: MapEntities,
   ) {
     this.updateChunkView();
+  }
+
+  async setSession(session: Session) {
+    if (this.session && !this.session.closed) {
+      // close active session ...
+      await this.session.disconnection();
+    }
+    if (this.session) {
+      this.session = session;
+    } else
+      this.linkSession(
+        session,
+        this.buildingsMap.allDirtyChunks,
+        this.buildingsMap.buildings,
+        this.entitiesMap.allDirtyChunks,
+        this.entitiesMap.entityChunks,
+      );
+
+    this.firstConnection = true;
   }
 
   expandViewArea(newViewArea: ViewAreaType) {
@@ -719,7 +739,7 @@ export default class Player {
     }
   }
 
-  linkSession(
+  private linkSession(
     session: Session,
     allBuildingDirtyChunks: DirtyBuildingChunkType[][][],
     buildings: (AnyServerBuilding | null)[][],
@@ -1080,6 +1100,13 @@ export default class Player {
 
   update(tick: number) {
     console.log("updating player");
+    if (this.firstConnection) {
+      console.log("sending full snapshot");
+      this.createBuildingSnapshot(tick);
+      this.createEntitySnapshot(tick);
+      this.createActionsSnapshot(tick);
+      this.firstConnection = false;
+    }
     this.updateClientEntities(tick);
     this.updateClientBuildings(tick);
   }
