@@ -71,7 +71,9 @@ export class ServerEntity<K extends EntityKind> implements EntitySnapshot<K> {
     public maxHp: number,
     public destroyed = false,
     public customState: Record<string, unknown>,
-    public chunkPositioning: [number, number][] = [],
+    public chunkPositioning: {
+      [id: number]: [number, number][];
+    } = [],
     public allDirtyChunks: DirtyEntityChunkType[][][],
   ) {
     this.updateFunction = EntitySystems[kind];
@@ -81,7 +83,7 @@ export class ServerEntity<K extends EntityKind> implements EntitySnapshot<K> {
     fieldName: F,
     value: EntitySnapshot<K>[F],
   ) {
-    this.chunkPositioning.forEach(([y, x]) => {
+    this.chunkPositioning[this.id].forEach(([y, x]) => {
       if (!(this.id in this.allDirtyChunks[this.allDirtyChunksAt][y][x]))
         this.allDirtyChunks[this.allDirtyChunksAt][y][x][this.id] = {};
 
@@ -89,9 +91,11 @@ export class ServerEntity<K extends EntityKind> implements EntitySnapshot<K> {
         value;
     });
   }
-
-  update(tick: number, allDirtyChunksAt: number) {
+  preUpdate(allDirtyChunksAt: number) {
     this.allDirtyChunksAt = allDirtyChunksAt;
+  }
+
+  update(tick: number) {
     this.updateFunction(this, tick);
   }
 }
@@ -101,7 +105,9 @@ export function createEntity<K extends EntityKind>(
   x: number,
   y: number,
   id: number,
-  chunkPositioning: [number, number][] = [],
+  chunkPositioning: {
+    [id: number]: [number, number][];
+  } = [],
   allDirtyChunks: DirtyEntityChunkType[][][],
 ) {
   const def = EntityDefs[kind].shared;
@@ -126,12 +132,11 @@ export type AnyServerEntity = ServerEntity<EntityKind>;
 export type AnyEntitySnapshot = EntitySnapshot<EntityKind>;
 export type DirtyEntityChunkType = { [id: number]: Partial<AnyEntitySnapshot> };
 export class MapEntities {
-  public readonly entities: {
-    [id: number]: AnyServerEntity;
-  } = {};
+  public readonly entities: Map<number, AnyServerEntity> = new Map();
   public readonly entityChunks: Set<AnyServerEntity>[][] = [];
   public readonly allDirtyChunks: DirtyEntityChunkType[][][] = [];
   public readonly fullDirtyEntities: Set<AnyServerEntity> = new Set();
+  public readonly removedEntities: Set<number> = new Set();
   public allDirtyChunksAt = 0;
   public readonly chunkPositioningPerEntity: {
     [id: number]: [number, number][];
@@ -190,17 +195,17 @@ export class MapEntities {
 
     // selecting the right chunks
     this.chunkPositioningPerEntity[id] = [];
-
-    this.entities[id] = createEntity(
+    const newEntity = createEntity(
       kind,
       x,
       y,
       id,
-      this.chunkPositioningPerEntity[id],
+      this.chunkPositioningPerEntity,
       this.allDirtyChunks,
     );
-    this.updateEntityChunks(this.entities[id]);
-    this.fullDirtyEntities.add(this.entities[id]);
+    this.entities.set(id, newEntity);
+    this.updateEntityChunks(newEntity);
+    this.fullDirtyEntities.add(newEntity);
   }
 
   updateEntityChunksBasedOnDirty() {
@@ -221,11 +226,12 @@ export class MapEntities {
     }
     for (const entityID of entitiesToUpdate) {
       // @ts-ignore
-      this.updateEntityChunks(this.entities[entityID]);
+      this.updateEntityChunks(this.entities.get(entityID));
     }
   }
 
   updateEntityChunks(entity: AnyServerEntity) {
+    if (!entity) return;
     for (const [chunkY, chunkX] of this.chunkPositioningPerEntity[entity.id]) {
       this.entityChunks[chunkY][chunkX].delete(entity);
     }
@@ -249,11 +255,49 @@ export class MapEntities {
     }
   }
 
-  updateEntities(dt: number) {
+  removeEntity(entityID: number) {
+    if (this.entities.has(entityID)) {
+      this.removedEntities.add(entityID);
+      const e = this.entities.get(entityID);
+      if (e) {
+        for (const [chunkY, chunkX] of this.chunkPositioningPerEntity[
+          entityID
+        ]) {
+          this.entityChunks[chunkY][chunkX].delete(e);
+        }
+      }
+      this.entities.delete(entityID);
+    }
+  }
+
+  preUpdate() {
+    // could i delta builder not copy but pass by references as objs are not destroyed...
     this.allDirtyChunksAt = (this.allDirtyChunksAt + 1) % DIRTY_CHUNKS_TICKS;
     this.fullDirtyEntities.clear();
-    for (const entityID in this.entities) {
-      this.entities[entityID].update(dt, this.allDirtyChunksAt);
+    this.removedEntities.clear();
+    // clear dirty chunks
+    for (
+      let y = 0;
+      y < this.allDirtyChunks[this.allDirtyChunksAt].length;
+      y++
+    ) {
+      for (
+        let x = 0;
+        x < this.allDirtyChunks[this.allDirtyChunksAt][y].length;
+        x++
+      ) {
+        this.allDirtyChunks[this.allDirtyChunksAt][y][x] = {};
+      }
+    }
+    for (const e of this.entities.values()) {
+      e.preUpdate(this.allDirtyChunksAt);
+    }
+  }
+
+  updateEntities(dt: number) {
+    // update entities
+    for (const e of this.entities.values()) {
+      e.update(dt);
     }
     this.updateEntityChunksBasedOnDirty();
   }

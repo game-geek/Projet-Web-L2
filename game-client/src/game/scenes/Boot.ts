@@ -1,6 +1,7 @@
 import { Scene } from "phaser";
 import { BuildingDefs } from "../../../../game-server/src/buildings/globals";
 import { BuildingKind } from "../../../../game-server/src/buildings/buildings";
+import { EntityDefs } from "../../../../game-server/src/entities/globals";
 
 export class Boot extends Scene {
   constructor() {
@@ -13,7 +14,6 @@ export class Boot extends Scene {
 
     this.load.image("background", "assets/bg.png");
     this.load.image("pickaxe", "assets/pickaxe2.png");
-    const textures = {};
     for (const buildingKind in BuildingDefs) {
       // @ts-ignore
       const b = BuildingDefs[buildingKind];
@@ -21,6 +21,16 @@ export class Boot extends Scene {
         this.load.image(textureName, b.client.textures[textureName]);
       }
     }
+    this.load.image("eliptae", "/assets/eliptae_32.png");
+    this.load.image("miner", "/assets/miner_32.png");
+    this.load.image("bullet", "/assets/bullet.png");
+    this.load.image("void", "/assets/void.png");
+
+    this.load.font({
+      key: "custom",
+      url: "assets/BruceForeverRegular-X3jd2.ttf",
+      format: "truetype",
+    });
   }
 
   create() {

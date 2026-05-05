@@ -8,12 +8,16 @@ import serverCommunication from "../serverCommunication";
 import {
   componentRegistry,
   createClientBuilding,
-  issueDeltaUpdate,
+  issueBuildingDeltaUpdate,
   issueSnapshotUpdate,
   MapBuildings,
 } from "./buildings/buildings";
 import { ClientStreamtype } from "../../../game-server/src/Player";
-import { createClientEntity, MapEntities } from "./entities/entities";
+import {
+  createClientEntity,
+  issueEntityDeltaUpdate,
+  MapEntities,
+} from "./entities/entities";
 
 export default class gameManager {
   public clientBuildingsMap = new MapBuildings(MAP_WIDTH, MAP_HEIGHT);
@@ -41,20 +45,45 @@ export default class gameManager {
     console.log("gamemanager init");
   }
 
-  dispatchAction(action: null | "mine" | "miner") {
+  dispatchAction(action: null | "mine" | "miner" | "eliptae" | "turret") {
     if (!this.scene) return;
     // @ts-ignore
     if (action == "mine") this.scene.setOverlayAction(action);
     // @ts-ignore
     else if (action == "miner") this.scene.setOverlayAction(action);
+    // @ts-ignore
+    else if (action == "eliptae") this.scene.setOverlayAction(action);
+    // @ts-ignore
+    else if (action == "turret") this.scene.setOverlayAction(action);
   }
 
   spawnMiner(x: number, y: number) {
     // spawn miner
     if (!this.clientStream) this.clientStream = { t: this.tick };
     if (!this.clientStream.a) this.clientStream.a = {};
-    if (!this.clientStream.a.sp) this.clientStream.a.sp = [];
-    this.clientStream.a.sp.push({ n: "miner", x, y });
+    if (!this.clientStream.a.spE) this.clientStream.a.spE = [];
+    this.clientStream.a.spE.push({ n: "miner", x, y });
+  }
+
+  spawnEliptae(x: number, y: number) {
+    // spawn miner
+    if (!this.clientStream) this.clientStream = { t: this.tick };
+    if (!this.clientStream.a) this.clientStream.a = {};
+    if (!this.clientStream.a.spE) this.clientStream.a.spE = [];
+    this.clientStream.a.spE.push({ n: "eliptae", x, y });
+  }
+
+  spawnTurret(x: number, y: number) {
+    // spawn miner
+    if (!this.clientStream) this.clientStream = { t: this.tick };
+    if (!this.clientStream.a) this.clientStream.a = {};
+    if (!this.clientStream.a.spB) this.clientStream.a.spB = [];
+    this.clientStream.a.spB.push({
+      n: "turret",
+      v: "turret",
+      x: Math.floor(x / 32),
+      y: Math.floor(y / 32),
+    });
   }
 
   mineSelection(selection: Geom.Rectangle) {
@@ -98,7 +127,7 @@ export default class gameManager {
     // render overlays for prediction
     this.setPredictionMiningOverlay(this.tick);
   }
-  update() {
+  update(dt: number) {
     this.tick++;
     // console.log("gameManager tick", this.tick);
 
@@ -126,6 +155,7 @@ export default class gameManager {
     // simulate
 
     // run interpolation on all components
+    this.clientEntitiesMap.updateEntities(dt);
   }
 
   private setPredictionMiningOverlay(tick: number) {
@@ -224,7 +254,7 @@ export default class gameManager {
           this.buildingsToMine = buildingsToMine;
         }
       }
-      if (action.c) {
+      if (typeof action.c == "number") {
         this.currency = action.c;
       }
       if (action.nB) {
@@ -254,6 +284,18 @@ export default class gameManager {
           );
         }
       }
+      // delete buildings
+      if (action.rB) {
+        for (const buildingID of action.rB) {
+          this.clientBuildingsMap.removeBuilding(buildingID);
+        }
+      }
+      // delete entities
+      if (action.rE) {
+        for (const entityID of action.rE) {
+          this.clientEntitiesMap.removeEntity(entityID);
+        }
+      }
       this.server.latestActions.delete(action);
     }
   }
@@ -270,10 +312,27 @@ export default class gameManager {
             );
           } else {
             console.log("updating building");
-            issueDeltaUpdate(
+            issueBuildingDeltaUpdate(
               // @ts-ignore
               this.clientBuildingsMap.buildings.get(parseInt(buildingID)),
               this.server.latestDatagram.bd[buildingID],
+            );
+          }
+        }
+      }
+      if (this.server.latestDatagram.ed) {
+        for (const entityID in this.server.latestDatagram.ed) {
+          if (!this.clientEntitiesMap.entities.has(parseInt(entityID))) {
+            // create the building with default fields if not present
+            console.log(
+              "got an update of an entity we don't have, fatal error!",
+            );
+          } else {
+            console.log("updating entity");
+            issueEntityDeltaUpdate(
+              // @ts-ignore
+              this.clientEntitiesMap.entities.get(parseInt(entityID)),
+              this.server.latestDatagram.ed[entityID],
             );
           }
         }

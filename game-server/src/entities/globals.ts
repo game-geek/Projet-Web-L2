@@ -1,3 +1,4 @@
+import Bullet from "./Bullet";
 import Eliptae from "./Eliptae";
 import { EntityDef, EntityKind, ServerEntity } from "./entities";
 import Miner from "./Miner";
@@ -8,17 +9,31 @@ export const EntityDefs = {
     shared: { maxHp: 100, killable: true, w: 1, h: 1 },
     server: {
       initState: () => ({
-        lightning: 10,
-        charge: 0,
-        targetId: null as number | null,
+        path: [],
+        isShooting: 0,
+        target: null,
+        area: 100,
       }),
     },
     client: {
       textures: {
-        top: "eliptae_top",
-        left: "eliptae_left",
-        right: "eliptae_right",
-        bottom: "eliptae_bottom",
+        top: "assets/eliptae_32.png",
+      },
+      components: ["Render"] as const,
+    },
+  },
+  bullet: {
+    shared: { maxHp: 100, killable: true, w: 10, h: 10 },
+    server: {
+      initState: () => ({
+        target: null,
+        damage: 10,
+        speed: 5,
+      }),
+    },
+    client: {
+      textures: {
+        top: "bullet_top",
       },
       components: ["Render"] as const,
     },
@@ -27,15 +42,15 @@ export const EntityDefs = {
     shared: { maxHp: 100, killable: true, w: 30, h: 30 },
     server: {
       initState: () => ({
-        mining: null,
+        mining: false,
+        miningSpeed: 50,
+        path: [],
+        target: null,
       }),
     },
     client: {
       textures: {
         top: "miner_top",
-        left: "miner_left",
-        right: "miner_right",
-        bottom: "miner_bottom",
       },
       components: ["Render"] as const,
     },
@@ -60,4 +75,5 @@ export type EntitySystemMapOf<K extends EntityKind> = EntitySystemMap[K];
 export const EntitySystems: EntitySystemMap = {
   eliptae: Eliptae,
   miner: Miner,
+  bullet: Bullet,
 } as const;

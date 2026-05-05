@@ -1,7 +1,11 @@
-import { Scene, Geom, Input } from "phaser";
+import { Scene, Geom, Input, Math as PMath } from "phaser";
 import serverCommunication from "../../serverCommunication";
 import gameManager from "../gameManager";
 import { gameManagerInstance } from "../../main";
+import {
+  MAP_HEIGHT,
+  MAP_WIDTH,
+} from "../../../../game-server/src/buildings/globals";
 
 export class Game extends Scene {
   camera: Phaser.Cameras.Scene2D.Camera;
@@ -11,8 +15,19 @@ export class Game extends Scene {
   currencyText: Phaser.GameObjects.Text | null = null;
 
   gameManager: gameManager | null = null;
+  private wasd: {
+    Q: Phaser.Input.Keyboard.Key;
+    Z: Phaser.Input.Keyboard.Key;
+    S: Phaser.Input.Keyboard.Key;
+    D: Phaser.Input.Keyboard.Key;
+  } | null = null;
+  private cameraSpeed = 10;
 
-  private overlayAction: null | "mine" | "miner" = null;
+  private MAP_WIDTH = MAP_WIDTH * 32;
+  private MAP_HEIGHT = MAP_HEIGHT * 32;
+  private isPanning = false;
+
+  private overlayAction: null | "mine" | "miner" | "eliptae" | "turret" = null;
 
   private selectionStart: Phaser.Math.Vector2 | null = null;
   private selectionGraphics: Phaser.GameObjects.Graphics | null = null;
@@ -21,13 +36,20 @@ export class Game extends Scene {
     super("Game");
   }
 
-  setOverlayAction(overlayAction: null | "mine" | "miner") {
+  setOverlayAction(
+    overlayAction: null | "mine" | "miner" | "eliptae" | "turret",
+  ) {
     if (overlayAction == "mine") {
       this.input.setDefaultCursor("url('assets/pickaxe2.png') 12 12, auto");
       this.overlayAction = overlayAction;
     } else if (overlayAction == "miner") {
-      console.log("fdlksfjdkfhdfjmdsmlfkmsdlfksdlmk");
-      this.input.setDefaultCursor("url('assets/pickaxe2.png') 12 12, auto");
+      this.input.setDefaultCursor("url('assets/miner_32.png') 16 16, auto");
+      this.overlayAction = overlayAction;
+    } else if (overlayAction == "eliptae") {
+      this.input.setDefaultCursor("url('assets/eliptae_32.png') 16 16, auto");
+      this.overlayAction = overlayAction;
+    } else if (overlayAction == "turret") {
+      this.input.setDefaultCursor("url('assets/turret_32.png') 16 16, auto");
       this.overlayAction = overlayAction;
     }
   }
@@ -40,6 +62,8 @@ export class Game extends Scene {
 
   create() {
     if (!this.input.keyboard) return;
+
+    // for overlay actions
     this.camera = this.cameras.main;
     this.camera.setBackgroundColor(0x000000);
 
@@ -123,6 +147,18 @@ export class Game extends Scene {
           pointer.y,
         );
         this.gameManager.spawnMiner(currentPoint.x, currentPoint.y);
+      } else if (this.overlayAction == "eliptae") {
+        const currentPoint = this.cameras.main.getWorldPoint(
+          pointer.x,
+          pointer.y,
+        );
+        this.gameManager.spawnEliptae(currentPoint.x, currentPoint.y);
+      } else if (this.overlayAction == "turret") {
+        const currentPoint = this.cameras.main.getWorldPoint(
+          pointer.x,
+          pointer.y,
+        );
+        this.gameManager.spawnTurret(currentPoint.x, currentPoint.y);
       }
     });
 
@@ -134,18 +170,132 @@ export class Game extends Scene {
         "Currency: 0",
         {
           fontSize: "24px",
-          fontFamily: "Arial",
+          fontFamily: "custom",
           color: "#ffffff",
           align: "right",
         },
       )
       .setOrigin(1, 0)
       .setScrollFactor(0);
+
+    // for panning
+
+    // Set bounds with 20% overscroll margin
+    const marginW = this.cameras.main.width * 0.2;
+    const marginH = this.cameras.main.height * 0.2;
+
+    this.camera.setBounds(
+      -marginW,
+      -marginH,
+      this.MAP_WIDTH + marginW * 2,
+      this.MAP_HEIGHT + marginH * 2,
+    );
+
+    // Panning logic: Toggle Panning on middle mouse or right click
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown() || pointer.middleButtonDown()) {
+        this.isPanning = true;
+      }
+    });
+
+    this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
+      this.isPanning = false;
+
+      // Soft Bounce Back logic: Check if out of actual map bounds
+      const cam = this.cameras.main;
+      const targetX = PMath.Clamp(
+        cam.scrollX,
+        -50,
+        this.MAP_WIDTH + 50 - cam.width,
+      );
+      const targetY = PMath.Clamp(
+        cam.scrollY,
+        -50,
+        this.MAP_HEIGHT + 50 - cam.height,
+      );
+
+      if (cam.scrollX !== targetX || cam.scrollY !== targetY) {
+        this.tweens.add({
+          targets: cam,
+          scrollX: targetX,
+          scrollY: targetY,
+          duration: 300,
+          ease: "Power2",
+        });
+      }
+    });
+
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (this.isPanning && pointer.isDown) {
+        this.camera.scrollX -=
+          (pointer.x - pointer.prevPosition.x) / this.camera.zoom;
+        this.camera.scrollY -=
+          (pointer.y - pointer.prevPosition.y) / this.camera.zoom;
+      }
+    });
+
+    // for background
+
+    const voidWidth = this.MAP_WIDTH + this.cameras.main.width * 0.4;
+    const voidHeight = this.MAP_HEIGHT + this.cameras.main.height * 0.4;
+
+    // Add a dark textured background covering the world
+    const voidBg = this.add
+      .tileSprite(
+        -this.cameras.main.width * 0.2,
+        -this.cameras.main.height * 0.2,
+        voidWidth,
+        voidHeight,
+        "void", // Ensure you have this texture loaded in your preloader
+      )
+      .setOrigin(0, 0)
+      .setDepth(-1000); // Send to back
+
+    // Create the map area visual (the 'playable' area)
+    this.background = this.add
+      .image(0, 0, "map_texture")
+      .setOrigin(0, 0)
+      .setDepth(-500);
+    this.add
+      .rectangle(0, 0, this.MAP_WIDTH, this.MAP_HEIGHT, 0x000000)
+      .setOrigin(0, 0)
+      .setDepth(-500);
+
+    this.input.on(
+      "wheel",
+      (
+        pointer: Phaser.Input.Pointer,
+        gameObjects: any,
+        deltaX: number,
+        deltaY: number,
+      ) => {
+        const zoomStep = 0.1;
+        const minZoom = 0.5;
+        const maxZoom = 2;
+
+        // Zoom in if deltaY is negative, out if positive
+        const newZoom = this.camera.zoom - (deltaY > 0 ? zoomStep : -zoomStep);
+        this.camera.setZoom(PMath.Clamp(newZoom, minZoom, maxZoom));
+      },
+    );
+    this.wasd = this.input.keyboard!.addKeys({
+      Q: Input.Keyboard.KeyCodes.Q,
+      Z: Input.Keyboard.KeyCodes.Z,
+      S: Input.Keyboard.KeyCodes.S,
+      D: Input.Keyboard.KeyCodes.D,
+    }) as any;
   }
   update(time: number, delta: number): void {
     if (!this.gameManager) return;
-    this.gameManager.update();
+    this.gameManager.update(delta);
     if (this.currencyText)
       this.currencyText.setText(`Currency: ${this.gameManager?.currency || 0}`);
+
+    if (this.wasd) {
+      if (this.wasd.Q.isDown) this.camera.scrollX -= this.cameraSpeed;
+      if (this.wasd.D.isDown) this.camera.scrollX += this.cameraSpeed;
+      if (this.wasd.Z.isDown) this.camera.scrollY -= this.cameraSpeed;
+      if (this.wasd.S.isDown) this.camera.scrollY += this.cameraSpeed;
+    }
   }
 }

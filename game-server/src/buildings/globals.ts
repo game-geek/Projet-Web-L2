@@ -6,10 +6,12 @@ import {
   ServerBuilding,
 } from "./buildings";
 import NaturalWall from "./NaturalWall";
+import Turret from "./Turret";
 
 // buildings in the game with their variants
 export const BuildingVariantsMap = {
   natural_wall: ["1", "2", "3", "4", "5", "6", "7", "8"],
+  turret: ["turret"],
 } as const; // "as const" is needed for the types match PERFECTLY their values, for ex "top" is "top" and not string
 
 // the default data related to those buildings
@@ -35,9 +37,29 @@ export const BuildingDefs = {
       components: ["RenderStatic"] as const,
     },
   },
+  turret: {
+    shared: { maxHp: 300, destructible: true, w: 1, h: 1 },
+    server: {
+      initState: () => ({
+        area: 200,
+        isShooting: 0,
+      }),
+    },
+    client: {
+      textures: {
+        turret: "assets/turret_32.png",
+      },
+      components: ["RenderStatic"] as const,
+    },
+  },
 } as const satisfies {
   [K in BuildingKind]: BuildingDef<K>;
 };
+
+export const BuildingKinds = Object.keys(
+  BuildingDefs,
+) as (keyof typeof BuildingDefs)[];
+export const BuildingVariants = Object.values(BuildingVariantsMap).flat();
 
 export const DIRTY_CHUNKS_TICKS = 20;
 export const CHUNK_WIDTH = 64;
@@ -58,4 +80,5 @@ export type BuildingSystemMapOf<K extends BuildingKind> = BuildingSystemMap[K];
 
 export const BuildingSystems: BuildingSystemMap = {
   natural_wall: NaturalWall,
+  turret: Turret,
 } as const;

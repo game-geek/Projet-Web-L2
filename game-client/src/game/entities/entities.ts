@@ -48,6 +48,12 @@ export class ClientEntity<K extends EntityKind> {
     console.log("entity spawn");
   }
 
+  update(dt: number) {
+    for (const comp of this.components.values()) {
+      comp.update(dt);
+    }
+  }
+
   addComponent(name: string, component: Component) {
     // should typesafe name + component...
     this.components.set(name, component);
@@ -56,6 +62,11 @@ export class ClientEntity<K extends EntityKind> {
     const c = this.components.get(name);
     if (c) c.destroy();
     this.components.delete(name);
+  }
+  destroy() {
+    for (const comp of this.components.values()) {
+      comp.destroy();
+    }
   }
 }
 
@@ -67,6 +78,11 @@ export class MapEntities {
     public readonly height: number,
   ) {}
 
+  removeEntity(entityID: number) {
+    const e = this.entities.get(entityID);
+    if (e) e.destroy();
+    this.entities.delete(entityID);
+  }
   addEntity(entity: ClientEntity<EntityKind>) {
     // verify if its position is correct w/ the map and if its a valid position
     if (
@@ -87,6 +103,11 @@ export class MapEntities {
       this.entities.has(entity.id),
     );
   }
+  updateEntities(dt: number) {
+    for (const entity of this.entities.values()) {
+      entity.update(dt);
+    }
+  }
 
   addComponent(
     buildingID: number,
@@ -102,7 +123,7 @@ export class MapEntities {
     if (b) b.removeComponent(name);
   }
 }
-export function issueDeltaUpdate(
+export function issueEntityDeltaUpdate(
   entity: ClientEntity<EntityKind>,
   snapshot: Partial<EntitySnapshot<EntityKind>>,
 ) {

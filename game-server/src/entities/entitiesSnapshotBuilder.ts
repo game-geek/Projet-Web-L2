@@ -20,7 +20,7 @@ export default class entitiesSnapshotBuilder {
       for (const entity of this.entityChunks[chunkY][chunkX]) {
         // @ts-ignore
         this.snapshot[entity.id] = {};
-        for (const field in EnitiySnapshotFields) {
+        for (const field of EnitiySnapshotFields) {
           if (field == "id") continue;
           if (field == "customState") {
             // @ts-ignore

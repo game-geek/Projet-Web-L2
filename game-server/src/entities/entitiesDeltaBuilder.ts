@@ -40,7 +40,7 @@ export default class entitiesDeltaBuilder {
       }
       for (const dirtyChunks of this.allDirtyChunks.slice(
         startingTickSnapshot > allDirtyChunksAt ? 0 : startingTickSnapshot,
-        allDirtyChunksAt,
+        allDirtyChunksAt + 1,
       )) {
         this.addNewSnapshot(dirtyChunks);
         totalDirtyTicks++;
@@ -61,6 +61,9 @@ export default class entitiesDeltaBuilder {
       "Entities delta:",
       tickNumber - this.ackedTick - 1,
       "ticks behind",
+      "added",
+      totalDirtyTicks,
+      this.snapshot,
     );
     return false;
   }
@@ -68,30 +71,30 @@ export default class entitiesDeltaBuilder {
   private addNewSnapshot(dirtyChunks: DirtyEntityChunkType[][]) {
     for (const [chunkY, chunkX] of this.chunks) {
       let dirtyChunk = dirtyChunks[chunkY][chunkX];
-      for (const buildingID in dirtyChunk) {
-        if (buildingID in this.snapshot) {
+      for (const entityID in dirtyChunk) {
+        if (entityID in this.snapshot) {
           // merge
-          for (const dirtyField in dirtyChunk[buildingID]) {
+          for (const dirtyField in dirtyChunk[entityID]) {
             if (dirtyField == "customState") {
-              if (this.snapshot[buildingID].customState) {
-                for (const dirtyField in dirtyChunk[buildingID].customState) {
-                  this.snapshot[buildingID].customState[dirtyField] =
-                    dirtyChunk[buildingID].customState[dirtyField];
+              if (this.snapshot[entityID].customState) {
+                for (const dirtyField in dirtyChunk[entityID].customState) {
+                  this.snapshot[entityID].customState[dirtyField] =
+                    dirtyChunk[entityID].customState[dirtyField];
                 }
               } else {
-                this.snapshot[buildingID].customState = structuredClone(
-                  dirtyChunk[buildingID].customState,
+                this.snapshot[entityID].customState = structuredClone(
+                  dirtyChunk[entityID].customState,
                 );
               }
             } else {
               // @ts-ignore
-              this.snapshot[buildingID][dirtyField] =
+              this.snapshot[entityID][dirtyField] =
                 // @ts-ignore
-                dirtyChunk[buildingID][dirtyField];
+                dirtyChunk[entityID][dirtyField];
             }
           }
         } else {
-          this.snapshot[buildingID] = structuredClone(dirtyChunk[buildingID]);
+          this.snapshot[entityID] = structuredClone(dirtyChunk[entityID]);
         }
       }
     }

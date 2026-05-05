@@ -1,8 +1,6 @@
 import ServerCommunication from "./serverCommunication";
-import "./connectionUI";
 import "./interfaceUI";
 import StartGame from "./game/main";
-import { closeConnectionUI, openConnectionUI } from "./connectionUI";
 import "./global.css";
 import gameManager from "./game/gameManager";
 
@@ -17,28 +15,37 @@ document.addEventListener("DOMContentLoaded", () => {
 export async function start(gameServerURl: string) {
   try {
     await server.initConnection(gameServerURl);
-    closeConnectionUI();
     const game = StartGame("game-container");
   } catch (err) {
     console.error(`Could not connect to game with url '${gameServerURl}`);
-    openConnectionUI();
+    window.location.replace("/");
   }
 }
 
 function attemptAutoConnect() {
   const savedURL = getGameServerURl();
   console.log(savedURL);
-  if (!savedURL) return openConnectionUI();
+  if (!savedURL) return window.location.replace("/");
 
   start(savedURL);
 }
 
-// Save the URL to local storage
-export function saveGameServerURL(gameServerURL: string) {
-  localStorage.setItem("gameServerURL", gameServerURL);
-}
-
 // get previously stored connection URL
 export function getGameServerURl() {
-  return localStorage.getItem("gameServerURL");
+  console.log(localStorage.getItem("data"));
+  if (localStorage.getItem("data")) {
+    try {
+      //@ts-ignore
+      const data = JSON.parse(localStorage.getItem("data"));
+      if (data.url) {
+        return data.url;
+      } else {
+        window.location.replace("/");
+      }
+    } catch (err) {
+      window.location.replace("/");
+    }
+  } else {
+    window.location.replace("/");
+  }
 }

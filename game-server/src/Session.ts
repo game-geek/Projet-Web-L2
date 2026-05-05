@@ -72,8 +72,10 @@ export default class Session {
   async sendDatagramJSON(snapshot: any) {
     try {
       const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
-      console.log("size", bytes);
-      await this.session.sendDatagram(bytes);
+      if (bytes.length > 1200) {
+        // temporary fallback
+        await this.sendStreamJSON(snapshot);
+      } else await this.session.sendDatagram(bytes);
     } catch (err) {
       console.log("Error while trying to send datagram", err);
     }

@@ -100,8 +100,11 @@ export class ServerBuilding<
     });
   }
 
-  update(tick: number, allDirtyChunksAt: number) {
+  preUpdate(allDirtyChunksAt: number) {
     this.allDirtyChunksAt = allDirtyChunksAt;
+  }
+
+  update(tick: number) {
     this.updateFunction(this, tick);
   }
 }
@@ -144,6 +147,7 @@ export class MapBuildings {
   public readonly allBuildings: Map<number, AnyServerBuilding> = new Map();
   public readonly allDirtyChunks: DirtyBuildingChunkType[][][] = [];
   public readonly fullDirtyBuildings: Set<AnyServerBuilding> = new Set();
+  public readonly removedBuildings: Set<number> = new Set();
   public allDirtyChunksAt = 0;
   public readonly chunkPositioningPerBuilding: {
     [id: number]: [number, number][];
@@ -176,6 +180,17 @@ export class MapBuildings {
           );
         }
       }
+    }
+  }
+
+  removeBuildind(buildingID: number) {
+    if (this.allBuildings.has(buildingID)) {
+      this.removedBuildings.add(buildingID);
+      const b = this.allBuildings.get(buildingID);
+      if (b) {
+        this.buildings[b.y][b.x] = null;
+      }
+      this.allBuildings.delete(buildingID);
     }
   }
 
@@ -286,13 +301,37 @@ export class MapBuildings {
       }
     }
   }
-
-  updateBuildings(dt: number) {
+  preUpdate() {
     this.allDirtyChunksAt = (this.allDirtyChunksAt + 1) % DIRTY_CHUNKS_TICKS;
     this.fullDirtyBuildings.clear();
+    this.removedBuildings.clear();
+    // clear dirty chunks
+    for (
+      let y = 0;
+      y < this.allDirtyChunks[this.allDirtyChunksAt].length;
+      y++
+    ) {
+      for (
+        let x = 0;
+        x < this.allDirtyChunks[this.allDirtyChunksAt][y].length;
+        x++
+      ) {
+        this.allDirtyChunks[this.allDirtyChunksAt][y][x] = {};
+      }
+    }
+
     for (let y = 0; y < this.mapHeight; y++) {
       for (let x = 0; x < this.mapWidth; x++) {
-        this.buildings[y][x]?.update(dt, this.allDirtyChunksAt);
+        this.buildings[y][x]?.preUpdate(this.allDirtyChunksAt);
+      }
+    }
+  }
+  updateBuildings(dt: number) {
+    for (let y = 0; y < this.mapHeight; y++) {
+      for (let x = 0; x < this.mapWidth; x++) {
+        const b = this.buildings[y][x];
+        if (!b) continue;
+        b.update(dt);
       }
     }
   }

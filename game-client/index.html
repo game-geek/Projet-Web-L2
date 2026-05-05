@@ -1,38 +1,407 @@
+<!-- AI gnenerated -->
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="/style.css" />
-    <title>Phaser - Template</title>
-  </head>
+    <title>Space Wars</title>
+    <style>
+      :root {
+        --bg-dark: #0a0a0f;
+        --bg-mid: #161620;
+        --bg-light: #222230;
+        --border: #3a3a5a;
+        --text: #c5c5f0;
+        --text-muted: #8a8ab8;
+        --accent: #a060ff;
+        --accent-light: #c090ff;
+        --accent-deep: #6020b0;
+        --glow: 0 0 12px rgba(160, 96, 255, 0.5);
+      }
 
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "Courier New", monospace;
+      }
+
+      body {
+        background: var(--bg-dark);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 1.5rem;
+        line-height: 1.6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Main form blocky UI */
+      .main {
+        width: 100%;
+        max-width: 600px;
+        padding: 1.5rem;
+        background: var(--bg-mid);
+        border: 1px solid var(--border);
+        border-radius: 0;
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+          var(--glow);
+      }
+
+      .title {
+        font-size: 1.7rem;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        color: var(--accent-light);
+        text-transform: uppercase;
+        margin-bottom: 1rem;
+      }
+
+      .welcome,
+      .technical {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        margin-bottom: 0.8rem;
+      }
+
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      label {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      input[type="text"] {
+        padding: 0.8rem;
+        background: var(--bg-light);
+        border: 1px solid var(--border);
+        border-radius: 0;
+        color: var(--text);
+        font-size: 0.95rem;
+        box-shadow: 0 0 4px rgba(96, 32, 176, 0.2);
+        transition: box-shadow 0.2s;
+      }
+
+      input[type="text"]:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: var(--glow);
+      }
+
+      button {
+        padding: 0.8rem 1.2rem;
+        border: 1px solid var(--accent);
+        border-radius: 0;
+        background: var(--bg-mid);
+        color: var(--accent-light);
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        transition:
+          background 0.2s,
+          color 0.2s;
+      }
+
+      button:hover {
+        background: var(--accent-deep);
+        color: #fff;
+        box-shadow: var(--glow);
+      }
+
+      /* Startup popup – full screen blocky window */
+      .startup-popup-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(10, 10, 15, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        border: 1px solid var(--border);
+        box-shadow: var(--glow);
+      }
+
+      .startup-popup {
+        width: 90%;
+        max-width: 800px;
+        max-height: 85vh;
+        background: var(--bg-mid);
+        border: 1px solid var(--border);
+        border-radius: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .startup-popup .close {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        width: 2rem;
+        height: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        border-radius: 0;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 1.1rem;
+      }
+
+      .startup-popup .close:hover {
+        background: rgba(160, 96, 255, 0.2);
+        color: #fff;
+      }
+
+      .startup-popup .body {
+        padding: 1.75rem;
+        padding-top: 3rem;
+        overflow-y: auto;
+        flex: 1;
+      }
+
+      .startup-popup .t {
+        font-size: 1.4rem;
+        font-weight: bold;
+        color: var(--accent-light);
+        margin-bottom: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .startup-popup p {
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 1.2rem;
+      }
+
+      .startup-popup button {
+        margin-top: 0.5rem;
+        padding: 0.7rem 1rem;
+        border: 1px solid var(--accent);
+        border-radius: 0;
+        background: transparent;
+        color: var(--accent-light);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+      }
+
+      .startup-popup button:hover {
+        background: var(--accent-deep);
+        color: #fff;
+      }
+
+      .popup {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        transition: 0.2s opacity;
+      }
+
+      .popup.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .popup-content {
+        background: white;
+        border-radius: 12px;
+        padding: 20px 24px;
+        max-width: 320px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        border: 1px solid #ddd;
+      }
+
+      .popup-content p {
+        margin: 0 0 16px 0;
+        font-size: 14px;
+        color: #333;
+      }
+
+      .popup-close {
+        background: #007bff;
+        color: white;
+        border: 0;
+        border-radius: 6px;
+        padding: 6px 16px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .popup-close:hover {
+        background: #0056b3;
+      }
+    </style>
+  </head>
   <body>
-    <section id="prestart" class="hidden">
-      <form id="connection">
-        <label for="game-server-url">Game server URL:</label>
-        <input type="text" name="game-server-url" />
+    <section class="main">
+      <div class="title">space wars</div>
+      <p class="welcome">welcome, conqueror of broken skies.</p>
+      <form id="configForm">
+        <label for="nameInput">conqueror name</label>
+        <input
+          type="text"
+          name="nameInput"
+          id="nameInput"
+          placeholder="King Space"
+        />
+        <p class="technical">connect to a fractal server.</p>
+        <label for="urlInput">space server url</label>
+        <input
+          type="text"
+          name="urlInput"
+          id="urlInput"
+          placeholder="https://"
+        />
+        <button>engage in war for peace</button>
       </form>
     </section>
-    <div id="app">
-      <div id="game-container"></div>
-    </div>
-    <div id="actions">
-      <div class="left">
-        <div id="mine">
-          <img src="/public/assets/pickaxe.png" width="50" height="50" alt="" />
-          mine
-        </div>
-      </div>
-      <div class="right">
-        <div id="miner">
-          <img src="/public/assets/pickaxe.png" width="50" height="50" alt="" />
-          <div class="name">miner</div>
-          <div class="price">50</div>
-        </div>
+
+    <div id="popup" class="popup hidden">
+      <div class="popup-content">
+        <p id="popupText"></p>
+        <button type="button" class="popup-close">OK</button>
       </div>
     </div>
-    <script type="module" src="/src/main.ts"></script>
+
+    <section class="startup-popup-overlay">
+      <div class="startup-popup">
+        <div class="close">X</div>
+        <div class="body">
+          <div class="t">echoes of the fractured core</div>
+          <p>
+            In the year 2147, the planet Erebus shattered under the weight of
+            its own overmined core. What remains are colossal floating
+            archipelagos—jagged islands of rock suspended in toxic storms,
+            riddled with ancient mining veins of volatile crystite, the last
+            resource fueling fusion reactors and plasma weaponry. You command
+            one of two rival Vanguard factions, crash‑landed exiles from a
+            fallen interstellar empire. Your opponent leads the opposing
+            Vanguard, both of you scrambling to establish dominance on a single,
+            contested archipelago. Crystite is finite—scattered in depletable
+            veins across the map—and every extraction counts. The islands are a
+            deadly chessboard. Position your turrets on high ground for kill
+            zones, cluster generators for energy shields, and erect barriers to
+            funnel enemy fire. Resources dwindle with every build; overextend,
+            and your hub flickers out. Waves of feral stronghold drones—remnants
+            of Erebus's automated defenses—erupt periodically from neutral enemy
+            citadels dotting the map. These relentless swarms target the weakest
+            base, buying time for your rival to strike. Outmaneuver your foe
+            through superior positioning: claim chokepoints, deny veins, and
+            bait stronghold assaults onto their lines. Alliances are
+            illusions—only one hub survives the storm. Forge your legend, or
+            become dust in the void.
+          </p>
+          <button id="accept-mission">je veux aider à restaurer la paix</button>
+        </div>
+      </div>
+    </section>
+
+    <script>
+      document
+        .querySelector(".startup-popup .close")
+        .addEventListener("click", () => {
+          document.querySelector(".startup-popup-overlay").style.display =
+            "none";
+        });
+
+      document
+        .querySelector("#accept-mission")
+        .addEventListener("click", () => {
+          document.querySelector(".startup-popup-overlay").style.display =
+            "none";
+        });
+
+      function uuidv4() {
+        return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+          (
+            c ^
+            (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
+          ).toString(16),
+        );
+      }
+
+      function isValidHttpsUrl(str) {
+        try {
+          const u = new URL(str);
+          return u.protocol === "https:";
+        } catch {
+          return false;
+        }
+      }
+
+      function showPopup(message) {
+        const popup = document.getElementById("popup");
+        const popupText = document.getElementById("popupText");
+        popupText.textContent = message;
+        popup.classList.remove("hidden");
+      }
+
+      function validateAndGo() {
+        const name = document.getElementById("nameInput").value?.trim();
+        const url = document.getElementById("urlInput").value?.trim();
+
+        if (!name) {
+          showPopup("Please enter a name.");
+          return false;
+        }
+
+        if (!url) {
+          showPopup("Please enter a URL.");
+          return false;
+        }
+
+        if (!isValidHttpsUrl(url)) {
+          showPopup(
+            "Please enter a valid HTTPS URL (e.g. https://example.com).",
+          );
+          return false;
+        }
+
+        const data = {
+          name,
+          url,
+          id: uuidv4(),
+        };
+
+        localStorage.setItem("data", JSON.stringify(data));
+        window.location.href = "/game";
+        return true;
+      }
+
+      document.getElementById("configForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        validateAndGo();
+      });
+
+      document.querySelector(".popup-close").addEventListener("click", () => {
+        document.getElementById("popup").classList.add("hidden");
+      });
+    </script>
   </body>
 </html>

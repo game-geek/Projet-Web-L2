@@ -48,6 +48,39 @@ type IncomingDatagramSchemaType = z.input<typeof IncomingDatagramSchema>;
 
 const IncomingStreamSchema = z.object({
   t: z.number(),
+  ed: z
+    .record(
+      z.string(),
+      z.object({
+        kind: z.string().optional(),
+        x: z.number().optional(),
+        y: z.number().optional(),
+        w: z.number().optional(),
+        h: z.number().optional(),
+        maxHp: z.number().optional(),
+        hp: z.number().optional(),
+        destroyed: z.boolean().optional(),
+        customState: z.record(z.string(), z.any()).optional(),
+      }),
+    )
+    .optional(),
+  bd: z
+    .record(
+      z.string(),
+      z.object({
+        kind: z.string().optional(),
+        variant: z.string().optional(),
+        x: z.number().optional(),
+        y: z.number().optional(),
+        w: z.number().optional(),
+        h: z.number().optional(),
+        maxHp: z.number().optional(),
+        hp: z.number().optional(),
+        destroyed: z.boolean().optional(),
+        customState: z.record(z.string(), z.any()).optional(),
+      }),
+    )
+    .optional(),
   a: z
     .object({
       bM: z
@@ -92,6 +125,8 @@ const IncomingStreamSchema = z.object({
           }),
         )
         .optional(),
+      rB: z.array(z.number()).optional(),
+      rE: z.array(z.number()).optional(),
     })
     .optional(),
   es: z
@@ -171,7 +206,10 @@ export default class serverCommunication {
     parsedDatagrams.forEach((dg, i) =>
       dg.t > parsedDatagrams[latestDatagramIndex].t ? i : null,
     );
-    this.latestDatagram = parsedDatagrams[latestDatagramIndex];
+    if (this.latestDatagram) {
+      if (this.latestDatagram.t < parsedDatagrams[latestDatagramIndex].t)
+        this.latestDatagram = parsedDatagrams[latestDatagramIndex];
+    } else this.latestDatagram = parsedDatagrams[latestDatagramIndex];
   }
 
   parseStreams() {
@@ -180,7 +218,7 @@ export default class serverCommunication {
       try {
         parsedStreams.push(IncomingStreamSchema.parse(stream));
       } catch (err) {
-        console.log("Error while trying to parse stream");
+        console.log("Error while trying to parse stream", err);
       }
       this.webT.incomingStreams.delete(stream);
     }
@@ -202,6 +240,19 @@ export default class serverCommunication {
       }
       if (stream.a) {
         this.latestActions.add(stream.a);
+      }
+      // temporary fallback...
+      if (
+        (this.latestDatagram && this.latestDatagram.t < stream.t) ||
+        this.latestDatagram == null
+      ) {
+        if (stream.bd && stream.ed) {
+          this.latestDatagram = { t: stream.t, bd: stream.bd, ed: stream.ed };
+        } else if (stream.bd) {
+          this.latestDatagram = { t: stream.t, bd: stream.bd };
+        } else if (stream.ed) {
+          this.latestDatagram = { t: stream.t, ed: stream.ed };
+        }
       }
     });
 

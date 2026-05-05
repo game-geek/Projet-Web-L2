@@ -36,9 +36,13 @@ body {
 }
 #actions .right {
   padding-right: 20px;
+  display: flex;
+  flex-direction: row;
 }
 
 #actions #mine,
+#actions #eliptae,
+#actions #turret,
 #actions #miner {
   display: flex;
   flex-direction: column;

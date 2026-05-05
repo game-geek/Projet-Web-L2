@@ -55,6 +55,11 @@ export class ClientBuilding<K extends BuildingKind> {
     if (c) c.destroy();
     this.components.delete(name);
   }
+  destroy() {
+    for (const comp of this.components.values()) {
+      comp.destroy();
+    }
+  }
 }
 
 export class MapBuildings {
@@ -72,6 +77,12 @@ export class MapBuildings {
         this.buildingsMap[y].push(null);
       }
     }
+  }
+
+  removeBuilding(buildingID: number) {
+    const b = this.buildings.get(buildingID);
+    if (b) b.destroy();
+    this.buildings.delete(buildingID);
   }
 
   addBuilding(building: ClientBuilding<BuildingKind>) {
@@ -136,7 +147,7 @@ export class MapBuildings {
     if (b) b.removeComponent(name);
   }
 }
-export function issueDeltaUpdate(
+export function issueBuildingDeltaUpdate(
   building: ClientBuilding<BuildingKind>,
   snapshot: Partial<BuildingSnapshot<BuildingKind>>,
 ) {
