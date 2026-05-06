@@ -22,7 +22,7 @@ export async function start(
     const game = StartGame("game-container");
   } catch (err) {
     console.error(`Could not connect to game with url '${gameServerURl}`);
-    // window.location.replace("/");
+    window.location.replace("/");
   }
 }
 
@@ -43,12 +43,12 @@ export function getGameData() {
       if (data.url && data.id && data.name) {
         return data;
       } else {
-        // window.location.replace("/");
+        window.location.replace("/");
       }
     } catch (err) {
-      // window.location.replace("/");
+      window.location.replace("/");
     }
   } else {
-    // window.location.replace("/");
+    window.location.replace("/");
   }
 }
