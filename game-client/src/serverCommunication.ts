@@ -46,7 +46,7 @@ const IncomingDatagramSchema = z.object({
 });
 type IncomingDatagramSchemaType = z.input<typeof IncomingDatagramSchema>;
 
-const IncomingStreamSchema = z.object({
+export const IncomingStreamSchema = z.object({
   t: z.number(),
   ed: z
     .record(
@@ -127,6 +127,21 @@ const IncomingStreamSchema = z.object({
         .optional(),
       rB: z.array(z.number()).optional(),
       rE: z.array(z.number()).optional(),
+      gs: z
+        .object({
+          gs: z.boolean(),
+          ge: z.boolean(),
+          ps: z.record(
+            z.string(),
+            z.object({
+              username: z.string(),
+              connected: z.boolean(),
+              ready: z.boolean(),
+              color: z.string(),
+            }),
+          ),
+        })
+        .optional(),
     })
     .optional(),
   es: z
@@ -180,14 +195,24 @@ export default class serverCommunication {
     t: number;
   } | null = null;
   public latestActions: Set<ServerStreamtype["a"]> = new Set();
+  public userID: null | string = null;
 
-  async initConnection(gameServerURL: string, userID: string) {
+  async initConnection(
+    gameServerURL: string,
+    userID: string,
+    username: string,
+  ) {
     if (!userID) throw new Error("Invalid userID: " + userID);
-    const response = await this.webT.connectToGameServer(gameServerURL, userID);
+    const response = await this.webT.connectToGameServer(
+      gameServerURL,
+      userID,
+      username,
+    );
     if (response === false)
       throw new Error("Could not connect to game: " + response);
     this.connected = true;
     this.gameServerURl = gameServerURL;
+    this.userID = userID;
   }
 
   parseDatagrams() {

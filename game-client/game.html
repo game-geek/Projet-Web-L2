@@ -37,6 +37,61 @@
         </div>
       </div>
     </div>
+    <section id="echoPopup" class="popup hidden">
+      <div class="popup-header">
+        <div>
+          <div class="title">echoes of the fractured core</div>
+          <div class="subtitle">lobby signal synchronization</div>
+        </div>
+        <!-- <button class="close" type="button" id="echoClose">X</button> -->
+      </div>
+
+      <div class="popup-body">
+        <div class="panel roster-panel">
+          <div class="panel-label">other space kings...</div>
+          <div id="playersGrid" class="players-grid"></div>
+        </div>
+
+        <div class="panel self-panel">
+          <div>
+            <div class="panel-label">your status</div>
+            <div id="selfName" class="self-name">you</div>
+            <div id="selfStatus" class="self-status">
+              waiting for lobby data
+            </div>
+
+            <form id="readyForm">
+              <div class="ready-row">
+                <input id="isReady" name="isReady" type="checkbox" />
+                <label class="ready-label" for="isReady">is ready</label>
+              </div>
+              <button
+                type="submit"
+                style="
+                  margin-top: 0.85rem;
+                  padding: 0.8rem 1rem;
+                  border: 1px solid var(--accent);
+                  background: transparent;
+                  color: var(--accent-light);
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                  cursor: pointer;
+                "
+              >
+                confirm
+              </button>
+            </form>
+          </div>
+
+          <div>
+            <p class="hint">
+              The game starts when at least 2 ready connected players are
+              present.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

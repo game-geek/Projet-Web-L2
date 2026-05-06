@@ -12,9 +12,13 @@ document.addEventListener("DOMContentLoaded", () => {
   attemptAutoConnect();
 });
 
-export async function start(gameServerURl: string, userID: string) {
+export async function start(
+  gameServerURl: string,
+  userID: string,
+  username: string,
+) {
   try {
-    await server.initConnection(gameServerURl, userID);
+    await server.initConnection(gameServerURl, userID, username);
     const game = StartGame("game-container");
   } catch (err) {
     console.error(`Could not connect to game with url '${gameServerURl}`);
@@ -26,7 +30,7 @@ function attemptAutoConnect() {
   const data = getGameData();
   if (!data) return window.location.replace("/");
 
-  start(data.url, data.id);
+  start(data.url, data.id, data.name);
 }
 
 // get previously stored connection URL

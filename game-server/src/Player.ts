@@ -61,6 +61,7 @@ const IncomingStreamSchema = z.object({
           }),
         )
         .optional(),
+      r: z.boolean().optional(),
     })
     .optional(),
 });
@@ -74,6 +75,7 @@ export default class Player {
   public entitiesDeltaBuilder: entitiesDeltaBuilder | null = null;
   public entitiesSnapshotBuilder: entitiesSnapshotBuilder | null = null;
   private clientTick = 0;
+  public color = "";
 
   private serverStream: ServerStreamtype | null = null;
 
@@ -81,6 +83,7 @@ export default class Player {
   private currency = 500;
   public entities: Set<number> = new Set();
   public buildings: Set<number> = new Set();
+  public playerReady = false;
 
   private bs = -1;
   private es = -1;
@@ -102,8 +105,9 @@ export default class Player {
       await this.session.disconnection();
     }
     if (this.session) {
+      console.log("relinking");
       this.session = session;
-    } else
+    } else {
       this.linkSession(
         session,
         this.buildingsMap.allDirtyChunks,
@@ -111,7 +115,7 @@ export default class Player {
         this.entitiesMap.allDirtyChunks,
         this.entitiesMap.entityChunks,
       );
-
+    }
     this.firstConnection = true;
   }
 
@@ -1098,6 +1102,58 @@ export default class Player {
     this.serverStream = null;
   }
 
+  nonGameUpdate(
+    tick: number,
+    players: Map<string, Player>,
+    playerEvent: boolean,
+    gameStarted: boolean,
+    gameEnd: boolean,
+  ) {
+    if (playerEvent || this.firstConnection) {
+      const playerInfo: any = {};
+      if (!this.serverStream) this.serverStream = { t: tick };
+      if (!this.serverStream.a) this.serverStream.a = {};
+      if (!this.serverStream.a.gs)
+        this.serverStream.a.gs = {
+          gs: gameStarted,
+          ge: gameEnd,
+          ps: {},
+        };
+      players.forEach((p) => {
+        if (!p.session || !p.session.userID) return;
+        //@ts-ignore
+        this.serverStream.a.gs.ps[p.session.userID] = {
+          username: p.session.username ?? "username_not_found",
+          connected: !p.session.closed,
+          ready: p.playerReady,
+          color: p.color,
+        };
+      });
+
+      this.firstConnection = false;
+    }
+  }
+  sendNonGameUpdate() {
+    // check for incoming streams
+    if (!this.session) return;
+    let latestStream: null | ClientStreamtype = null;
+    for (const stream of this.session.incomingStreams) {
+      console.log("new stream");
+      const parsedStream = IncomingStreamSchema.parse(stream);
+      if (!latestStream) latestStream = parsedStream;
+      else if (parsedStream.t > latestStream.t) latestStream = parsedStream;
+      this.session.incomingStreams.delete(stream);
+    }
+    console.log(latestStream);
+    if (latestStream && latestStream.a) {
+      this.playerReady = latestStream.a.r ?? this.playerReady;
+      console.log("updating player status");
+    }
+    if (this.serverStream) {
+      this.session.sendStreamJSON(this.serverStream);
+      this.serverStream = null;
+    }
+  }
   update(tick: number) {
     console.log("updating player");
     if (this.firstConnection) {

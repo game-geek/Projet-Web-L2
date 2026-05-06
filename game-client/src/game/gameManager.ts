@@ -18,6 +18,7 @@ import {
   issueEntityDeltaUpdate,
   MapEntities,
 } from "./entities/entities";
+import { closePopup, loadAndOpen } from "../interfaceUI";
 
 export default class gameManager {
   public clientBuildingsMap = new MapBuildings(MAP_WIDTH, MAP_HEIGHT);
@@ -36,6 +37,7 @@ export default class gameManager {
     buildingsToMine: new Map(),
   };
   public buildingsToMine: Set<number> = new Set();
+  public gameStarted = false;
   currency = 0;
 
   constructor(public server: serverCommunication) {}
@@ -43,6 +45,12 @@ export default class gameManager {
   init(scene: Phaser.Scene) {
     this.scene = scene;
     console.log("gamemanager init");
+  }
+
+  setIsReady(ready: boolean) {
+    if (!this.clientStream) this.clientStream = { t: this.tick };
+    if (!this.clientStream.a) this.clientStream.a = {};
+    this.clientStream.a.r = ready;
   }
 
   dispatchAction(action: null | "mine" | "miner" | "eliptae" | "turret") {
@@ -238,6 +246,14 @@ export default class gameManager {
         this.scene,
       );
     }
+    for (const bid of buildingsToMine) {
+      this.clientBuildingsMap.addComponent(
+        bid,
+        "MiningOverlay",
+        componentRegistry["MiningOverlay"],
+        this.scene,
+      );
+    }
     for (const bid of buildingIdsToRemoveIfNotPresent) {
       this.clientBuildingsMap.removeComponent(bid, "MiningOverlay");
     }
@@ -295,6 +311,13 @@ export default class gameManager {
         for (const entityID of action.rE) {
           this.clientEntitiesMap.removeEntity(entityID);
         }
+      }
+
+      // game state
+      if (action.gs) {
+        this.gameStarted = action.gs.gs;
+        if (!action.gs.gs) loadAndOpen(action.gs, this.server.userID ?? "");
+        else closePopup();
       }
       this.server.latestActions.delete(action);
     }

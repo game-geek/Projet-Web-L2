@@ -3,6 +3,7 @@ import * as z from "zod";
 
 const IncomingAuthStream = z.object({
   userID: z.string(),
+  username: z.string(),
 });
 type ClientDatagramtypeType = z.input<typeof IncomingAuthStream>;
 
@@ -11,17 +12,22 @@ export default class Session {
   public incomingDatagrams: Set<any> = new Set();
   public incomingStreams: Set<any> = new Set();
   public userID: string | null = null;
+  public username: string | null = null;
   private stream:
     | WritableStreamDefaultWriter<Uint8Array<ArrayBufferLike>>
     | undefined;
   public closed = false;
 
-  constructor(private session: ServerSession) {
+  constructor(public session: ServerSession) {
     // collect irt incoming diagrams
-    session.closed.then((e) => {
-      this.closed = true;
-      console.warn("[session] session closed", e.code, e.reason);
-    });
+    session.closed
+      .then((e) => {
+        this.closed = true;
+        console.warn("[session] session closed", e.code, e.reason);
+      })
+      .catch((err) => {
+        console.log("error", err);
+      });
     void (async () => {
       try {
         for await (const datagram of session.incomingDatagrams()) {
@@ -93,6 +99,7 @@ export default class Session {
     try {
       const msg = IncomingAuthStream.parse(data);
       this.userID = msg.userID;
+      this.username = msg.username;
       console.log("user authenticated");
       // could call global function to make us join the game
     } catch (err) {
@@ -162,7 +169,6 @@ export class ReadStream {
   private packetlengthAt = 0;
   private writePos = 0;
   private chunkAt = 0;
-  private session: Session | null = null;
 
   constructor(
     dataReader: ReadableStreamDefaultReader<Uint8Array<ArrayBufferLike>>,
@@ -170,9 +176,8 @@ export class ReadStream {
       a: Uint8Array<ArrayBufferLike>,
       s: null | Session,
     ) => void,
-    session: Session | null = null,
+    private session: Session | null = null,
   ) {
-    this.session = session;
     this.start(dataReader);
   }
 
@@ -182,92 +187,98 @@ export class ReadStream {
   private async start(
     dataReader: ReadableStreamDefaultReader<Uint8Array<ArrayBufferLike>>,
   ) {
-    while (true) {
-      const { done, value: chunk } = await dataReader.read(); // New bytes!
-      if (done) break;
-      this.chunkAt = 0;
-      while (this.chunkAt < chunk.length) {
-        if (this.newPacket) {
-          if (this.packetlengthAt == 0) {
-            if (this.chunkAt + 1 < chunk.length) {
+    try {
+      while (true) {
+        const { done, value: chunk } = await dataReader.read(); // New bytes!
+        if (done) break;
+        this.chunkAt = 0;
+        while (this.chunkAt < chunk.length) {
+          if (this.newPacket) {
+            if (this.packetlengthAt == 0) {
+              if (this.chunkAt + 1 < chunk.length) {
+                // fine
+                this.newPacket = false;
+                this.packetLength[0] = chunk[this.chunkAt];
+                this.packetLength[1] = chunk[this.chunkAt + 1];
+                this.messageLength = this.readStreamPayloadLength(
+                  this.packetLength,
+                );
+                this.chunkAt += 2;
+              } else {
+                this.packetLength[0] = chunk[this.chunkAt];
+                this.chunkAt += 1;
+                this.packetlengthAt = 1;
+              }
+            } else if (this.packetlengthAt == 1) {
               // fine
+              this.packetLength[1] = chunk[this.chunkAt];
               this.newPacket = false;
-              this.packetLength[0] = chunk[this.chunkAt];
-              this.packetLength[1] = chunk[this.chunkAt + 1];
               this.messageLength = this.readStreamPayloadLength(
                 this.packetLength,
               );
-              this.chunkAt += 2;
+              this.packetlengthAt = 0;
+              this.chunkAt == 1;
             } else {
-              this.packetLength[0] = chunk[this.chunkAt];
-              this.chunkAt += 1;
-              this.packetlengthAt = 1;
+              console.log("impossible case 2");
             }
-          } else if (this.packetlengthAt == 1) {
-            // fine
-            this.packetLength[1] = chunk[this.chunkAt];
-            this.newPacket = false;
-            this.messageLength = this.readStreamPayloadLength(
-              this.packetLength,
-            );
-            this.packetlengthAt = 0;
-            this.chunkAt == 1;
           } else {
-            console.log("impossible case 2");
-          }
-        } else {
-          if (
-            chunk.length - this.chunkAt <
-            this.messageLength - this.writePos
-          ) {
-            // bytes left to read in chunk
-            this.buffer.set(
-              chunk.subarray(this.chunkAt, chunk.length),
-              this.writePos,
+            if (
+              chunk.length - this.chunkAt <
+              this.messageLength - this.writePos
+            ) {
+              // bytes left to read in chunk
+              this.buffer.set(
+                chunk.subarray(this.chunkAt, chunk.length),
+                this.writePos,
+              );
+              this.writePos += chunk.length - this.chunkAt;
+              this.chunkAt = chunk.length;
+            } else {
+              this.buffer.set(
+                chunk.subarray(
+                  this.chunkAt,
+                  this.chunkAt + (this.messageLength - this.writePos),
+                ),
+                this.writePos,
+              );
+              this.chunkAt += this.messageLength - this.writePos;
+              this.writePos += this.messageLength - this.writePos;
+            }
+
+            console.log(
+              "stream data " +
+                this.writePos +
+                "/" +
+                this.messageLength.toString(),
             );
-            this.writePos += chunk.length - this.chunkAt;
-            this.chunkAt = chunk.length;
-          } else {
-            this.buffer.set(
-              chunk.subarray(
-                this.chunkAt,
-                this.chunkAt + (this.messageLength - this.writePos),
-              ),
-              this.writePos,
-            );
-            this.chunkAt += this.messageLength - this.writePos;
-            this.writePos += this.messageLength - this.writePos;
           }
 
-          console.log(
-            "stream data " +
-              this.writePos +
-              "/" +
-              this.messageLength.toString(),
-          );
-        }
+          // Check if message is finished
+          if (this.writePos > this.messageLength) {
+            console.log(
+              "Protocol not respected, message is too long, it does not correspond to the said length",
+              "writepos: ",
+              this.writePos,
+              "messsage length: ",
+              this.messageLength,
+            );
+            break;
+          }
+          if (this.writePos == this.messageLength) {
+            this.newPacket = true;
+            this.writePos = 0;
 
-        // Check if message is finished
-        if (this.writePos > this.messageLength) {
-          console.log(
-            "Protocol not respected, message is too long, it does not correspond to the said length",
-            "writepos: ",
-            this.writePos,
-            "messsage length: ",
-            this.messageLength,
-          );
-          break;
-        }
-        if (this.writePos == this.messageLength) {
-          this.newPacket = true;
-          this.writePos = 0;
-
-          this.payloadCallback(
-            this.buffer.subarray(0, this.messageLength),
-            this.session,
-          );
+            this.payloadCallback(
+              this.buffer.subarray(0, this.messageLength),
+              this.session,
+            );
+          }
         }
       }
+    } catch (err) {
+      console.log("Webtransport connection closed");
+      if (this.session) this.session.closed = true;
+      this.session?.session.close();
     }
   }
 }

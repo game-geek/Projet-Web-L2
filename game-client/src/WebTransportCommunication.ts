@@ -13,7 +13,11 @@ export default class WebTransportCommunication {
   public readStream: any;
   constructor() {}
 
-  public async connectToGameServer(gameServerUrl: string, userID: string) {
+  public async connectToGameServer(
+    gameServerUrl: string,
+    userID: string,
+    username: string,
+  ) {
     try {
       this.gameServerURL = gameServerUrl;
       this.ready = false;
@@ -45,15 +49,15 @@ export default class WebTransportCommunication {
       };
       e();
       // authenticate
-      return this.auth(userID);
+      return this.auth(userID, username);
     } catch (err) {
       this.transport = null;
       return `[WebT] Error while trying to connect to ${this.gameServerURL}`;
     }
   }
 
-  private async auth(userID: string) {
-    return await this.writeStream({ userID });
+  private async auth(userID: string, username: string) {
+    return await this.writeStream({ userID, username });
   }
 
   private async readDatagramloop(reader: ReadableStreamDefaultReader<any>) {
@@ -82,12 +86,6 @@ export default class WebTransportCommunication {
       );
       const view = new DataView(buffer.buffer);
       view.setUint16(0, result.written, false);
-      console.log(
-        "sending authentication request",
-        stream,
-        "size: ",
-        result.written,
-      );
       await this.streamWriter.write(buffer.subarray(0, 2 + result.written));
     } catch (err) {
       console.log("Error while trying to send stream", err);

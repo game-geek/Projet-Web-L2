@@ -51,8 +51,12 @@ incrementGlobalIndex();
 
 let tick = 1;
 const MAX_PLAYERS = 4;
+let playerEvent = false;
+let disconnectedPlayers: Set<string> = new Set();
+let connectedReadyPlayers: Set<string> = new Set();
 function checkForNewSessions() {
   for (const newSession of newPlayerSessions) {
+    console.log("new session");
     if (newSession.userID && players.has(newSession.userID)) {
       // player rejoining
       // link new session
@@ -68,9 +72,9 @@ function checkForNewSessions() {
         );
         players.set(newSession.userID, p);
         p.setSession(newSession);
-
-        newPlayerSessions.delete(newSession);
       } else p.setSession(newSession);
+      newPlayerSessions.delete(newSession);
+      playerEvent = true;
     } else if (newSession.userID) {
       if (players.size >= MAX_PLAYERS) {
         // player limit reached, make spectator ?
@@ -84,45 +88,108 @@ function checkForNewSessions() {
       players.set(newSession.userID, p);
       p.setSession(newSession);
       newPlayerSessions.delete(newSession);
+      playerEvent = true;
+    }
+  }
+  for (const p of players.values()) {
+    if (!p.session || !p.session.userID) continue;
+    if (p.session.closed && !disconnectedPlayers.has(p.session.userID)) {
+      disconnectedPlayers.add(p.session.userID);
+      playerEvent = true;
+    } else if (!p.session.closed && disconnectedPlayers.has(p.session.userID)) {
+      disconnectedPlayers.delete(p.session.userID);
+      playerEvent = true;
+    }
+    if (
+      !disconnectedPlayers.has(p.session.userID) &&
+      p.playerReady &&
+      !connectedReadyPlayers.has(p.session.userID)
+    ) {
+      connectedReadyPlayers.add(p.session.userID);
+      playerEvent = true;
+    } else if (
+      (disconnectedPlayers.has(p.session.userID) || !p.playerReady) &&
+      connectedReadyPlayers.has(p.session.userID)
+    ) {
+      connectedReadyPlayers.delete(p.session.userID);
+      playerEvent = true;
     }
   }
   // check if session is alwready link
 }
 
+let gameStarted = false;
+let endOfGame = false;
+
 function update() {
+  console.log("running", tick);
   checkForNewSessions();
 
-  console.log("running", tick);
-  // read data from clients and do actions
-  //...
-
-  // clear previous
-  serverBuildingsMap.preUpdate();
-  serverEntitiesMap.preUpdate();
-
-  // process inputs
-  players.forEach((player) => {
-    player.processDatagrams();
-    player.processStreams(tick);
-    player.update(tick);
-  });
-  ai.update(tick);
-
-  // simulate
-  serverBuildingsMap.updateBuildings(tick);
-  serverEntitiesMap.updateEntities(tick);
-
-  // build and send the delta snapshot
-  players.forEach((player) => {
-    player.createDelta(
-      tick,
-      serverBuildingsMap.allDirtyChunksAt,
-      serverEntitiesMap.allDirtyChunksAt,
-    );
-    player.sendDelta(tick);
-    player.sendSnapshot(tick);
-  });
+  if (gameStarted) {
+    // read data from clients and do actions
+    //...
+    // clear previous
+    serverBuildingsMap.preUpdate();
+    serverEntitiesMap.preUpdate();
+    // process inputs
+    players.forEach((player) => {
+      player.processDatagrams();
+      player.processStreams(tick);
+      player.update(tick);
+    });
+    ai.update(tick);
+    // simulate
+    serverBuildingsMap.updateBuildings(tick);
+    serverEntitiesMap.updateEntities(tick);
+    // build and send the delta snapshot
+    players.forEach((player) => {
+      if (player.session && !player.session.closed) {
+        if (playerEvent) {
+          player.nonGameUpdate(
+            tick,
+            players,
+            playerEvent,
+            gameStarted,
+            endOfGame,
+          );
+          playerEvent = false;
+        }
+        player.createDelta(
+          tick,
+          serverBuildingsMap.allDirtyChunksAt,
+          serverEntitiesMap.allDirtyChunksAt,
+        );
+        player.sendDelta(tick);
+        player.sendSnapshot(tick);
+      }
+    });
+  } else {
+    if (endOfGame) {
+      // end game stuff
+    } else {
+      // before game
+      // check if we can start the game
+      if (connectedReadyPlayers.size >= 2) {
+        gameStarted = true;
+        playerEvent = true;
+      }
+      players.forEach((player) => {
+        if (player.session && !player.session.closed) {
+          if (playerEvent)
+            player.nonGameUpdate(
+              tick,
+              players,
+              playerEvent,
+              gameStarted,
+              endOfGame,
+            );
+          player.sendNonGameUpdate();
+        }
+      });
+      playerEvent = false;
+    }
+  }
   tick++;
 }
-setInterval(update, 500);
+setInterval(update, 100);
 console.log("updated");

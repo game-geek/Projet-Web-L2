@@ -40,6 +40,5 @@ export default class buildingsSnapshotBuilder {
         }
       }
     }
-    console.log("s", this.snapshot);
   }
 }
