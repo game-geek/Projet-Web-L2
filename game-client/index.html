@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Space Wars</title>
     <style>
+      @font-face {
+        font-family: "game";
+        src: url("assets/BruceForeverRegular-X3jd2.ttf") format("truetype");
+      }
       :root {
         --bg-dark: #0a0a0f;
         --bg-mid: #161620;
@@ -24,6 +28,7 @@
         margin: 0;
         padding: 0;
         font-family: "Courier New", monospace;
+        /* font-family: "game", "game", Arial, sans-serif; */
       }
 
       body {
@@ -38,6 +43,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
+      }
+
+      .body > p {
+        font-size: 100;
       }
 
       /* Main form blocky UI */
