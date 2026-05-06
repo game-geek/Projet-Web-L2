@@ -61,7 +61,9 @@ function renderPlayers(state: LobbyState, selfId: string) {
         <div>ready: ${player.ready ? "yes" : "no"}</div>
       </div>
     `;
+    card.style.border = ".5px solid" + player.color;
     grid.appendChild(card);
+    // grid.getElementsByClassName("player-name")[0].style.color = player.color;
   });
 }
 
@@ -111,3 +113,72 @@ readyForm.addEventListener("submit", (e) => {
   const isReady = readyInput.checked;
   gameManagerInstance.setIsReady(isReady);
 });
+
+// banner
+
+const bannerElement = document.getElementById("playerBanner") as HTMLElement;
+
+export function updatePlayerBanner(
+  validatedData: LobbyState,
+  userID: string,
+): void {
+  if (!validatedData) return;
+
+  // Clear existing slots
+  bannerElement.innerHTML = "";
+
+  // Update slots with player data
+  let slotIndex = 0;
+  Object.entries(validatedData.ps)
+    .sort(([id1, p1], [id2, _]) =>
+      id1 == userID ? -1 : id2 == userID ? 1 : p1.connected ? -1 : 1,
+    )
+    .forEach(([playerID, player]) => {
+      const slot = document.createElement("div");
+      slot.className = "banner-player-slot";
+
+      const playerName = document.createElement("div");
+      playerName.className = "banner-player-name";
+
+      const playerStatus = document.createElement("h6");
+      playerStatus.className = "banner-player-status";
+
+      slot.appendChild(playerName);
+      slot.appendChild(playerStatus);
+      bannerElement.appendChild(slot);
+
+      // Update name
+      playerName.textContent = playerID == userID ? "YOU" : player.username;
+
+      if (player.connected) {
+        playerStatus.textContent = "connected";
+        playerStatus.className = `banner-player-connected`;
+      } else {
+        playerStatus.textContent = "disconnected";
+        playerStatus.className = "banner-player-disconnected";
+      }
+
+      // Apply player color to border (override accent)
+      slot.style.backgroundColor = hexToRgba(player.color, 0.3);
+
+      slotIndex++;
+    });
+
+  // Style override for player color in CSS (add this to your CSS)
+  const style = document.createElement("style");
+  style.textContent = `
+    .banner-player-slot.connected::before {
+      border-color: var(--player-color, var(--accent));
+      box-shadow: 0 0 4px var(--player-color-rgb, rgba(160, 96, 255, 0.3));
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function hexToRgba(hex: string, alpha = 1) {
+  const cleanHex = hex.replace("#", "");
+  const r = parseInt(cleanHex.substr(0, 2), 16);
+  const g = parseInt(cleanHex.substr(2, 2), 16);
+  const b = parseInt(cleanHex.substr(4, 2), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}

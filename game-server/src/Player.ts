@@ -75,7 +75,6 @@ export default class Player {
   public entitiesDeltaBuilder: entitiesDeltaBuilder | null = null;
   public entitiesSnapshotBuilder: entitiesSnapshotBuilder | null = null;
   private clientTick = 0;
-  public color = "";
 
   private serverStream: ServerStreamtype | null = null;
 
@@ -95,6 +94,7 @@ export default class Player {
     public ViewArea: ViewAreaType,
     public buildingsMap: MapBuildings,
     public entitiesMap: MapEntities,
+    public color: string,
   ) {
     this.updateChunkView();
   }

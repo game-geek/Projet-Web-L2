@@ -18,7 +18,7 @@ import {
   issueEntityDeltaUpdate,
   MapEntities,
 } from "./entities/entities";
-import { closePopup, loadAndOpen } from "../interfaceUI";
+import { closePopup, loadAndOpen, updatePlayerBanner } from "../interfaceUI";
 
 export default class gameManager {
   public clientBuildingsMap = new MapBuildings(MAP_WIDTH, MAP_HEIGHT);
@@ -316,8 +316,13 @@ export default class gameManager {
       // game state
       if (action.gs) {
         this.gameStarted = action.gs.gs;
-        if (!action.gs.gs) loadAndOpen(action.gs, this.server.userID ?? "");
+        if (!action.gs.gs && !action.gs.ge)
+          loadAndOpen(action.gs, this.server.userID ?? "");
         else closePopup();
+        updatePlayerBanner(
+          action.gs,
+          this.server.userID ?? "_unknown_username_",
+        );
       }
       this.server.latestActions.delete(action);
     }
