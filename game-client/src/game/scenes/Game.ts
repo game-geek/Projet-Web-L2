@@ -27,7 +27,13 @@ export class Game extends Scene {
   private MAP_HEIGHT = MAP_HEIGHT * 32;
   private isPanning = false;
 
-  private overlayAction: null | "mine" | "miner" | "eliptae" | "turret" = null;
+  private overlayAction:
+    | null
+    | "mine"
+    | "miner"
+    | "eliptae"
+    | "turret"
+    | "wall" = null;
 
   private selectionStart: Phaser.Math.Vector2 | null = null;
   private selectionGraphics: Phaser.GameObjects.Graphics | null = null;
@@ -37,7 +43,7 @@ export class Game extends Scene {
   }
 
   setOverlayAction(
-    overlayAction: null | "mine" | "miner" | "eliptae" | "turret",
+    overlayAction: null | "mine" | "miner" | "eliptae" | "turret" | "wall",
   ) {
     if (overlayAction == "mine") {
       this.input.setDefaultCursor("url('assets/pickaxe2.png') 12 12, auto");
@@ -50,6 +56,9 @@ export class Game extends Scene {
       this.overlayAction = overlayAction;
     } else if (overlayAction == "turret") {
       this.input.setDefaultCursor("url('assets/turret_32.png') 16 16, auto");
+      this.overlayAction = overlayAction;
+    } else if (overlayAction == "wall") {
+      this.input.setDefaultCursor("url('assets/wall.png') 16 16, auto");
       this.overlayAction = overlayAction;
     }
   }
@@ -72,26 +81,69 @@ export class Game extends Scene {
     const esc = this.input.keyboard.addKey(Input.Keyboard.KeyCodes.ESC);
 
     esc.on("down", () => {
+      if (!this.gameManager) return;
       console.log("Escape pressed");
+      if (!this.overlayAction) {
+        this.gameManager.clearRobotSelection();
+      }
       this.overlayAction = null;
       this.input.setDefaultCursor("auto");
     });
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.overlayAction == "mine") {
+      if (!pointer.leftButtonDown()) return;
+      if (!this.overlayAction) {
+        this.selectionStart = this.cameras.main.getWorldPoint(
+          pointer.x,
+          pointer.y,
+        );
+      } else if (this.overlayAction == "mine") {
         // Save start position in World coordinates
         this.selectionStart = this.cameras.main.getWorldPoint(
           pointer.x,
           pointer.y,
         );
+      } else if (this.overlayAction == "wall" && pointer.leftButtonDown()) {
+        if (!this.gameManager) return;
+        // Save start position in World coordinates
+        const p = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.gameManager.spawnWall(p.x, p.y);
       }
     });
 
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!this.overlayAction) return;
+      if (this.overlayAction == "wall" && pointer.leftButtonDown()) {
+        if (!this.gameManager) return;
+        // Save start position in World coordinates
+        const p = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.gameManager.spawnWall(p.x, p.y);
+      }
       if (!this.selectionGraphics) return;
       if (!this.selectionStart || !pointer.isDown) return;
 
-      if (this.overlayAction == "mine") {
+      if (!this.overlayAction) {
+        const currentWorld = this.cameras.main.getWorldPoint(
+          pointer.x,
+          pointer.y,
+        );
+        // Clear the previous frame's drawing
+        this.selectionGraphics.clear();
+
+        // Set the fill color (0x00ff00 is green) and alpha (0.3)
+        this.selectionGraphics.fillStyle(0xddb206, 0.3);
+
+        // Set the outline style (optional, for better visibility)
+        this.selectionGraphics.lineStyle(1, 0xce9906, 1.0);
+
+        // Calculate width/height relative to the start point
+        const x = Math.min(this.selectionStart.x, currentWorld.x);
+        const y = Math.min(this.selectionStart.y, currentWorld.y);
+        const width = Math.abs(currentWorld.x - this.selectionStart.x);
+        const height = Math.abs(currentWorld.y - this.selectionStart.y);
+
+        // Draw the filled rectangle and the outline
+        this.selectionGraphics.fillRect(x, y, width, height);
+        this.selectionGraphics.strokeRect(x, y, width, height);
+      } else if (this.overlayAction == "mine") {
         const currentWorld = this.cameras.main.getWorldPoint(
           pointer.x,
           pointer.y,
@@ -119,9 +171,35 @@ export class Game extends Scene {
     });
 
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
-      if (!this.overlayAction || !this.gameManager) return;
+      if (!this.gameManager) return;
+      if (!pointer.leftButtonReleased()) return;
 
-      if (this.overlayAction == "mine") {
+      if (!this.overlayAction) {
+        console.log("got selection for robots");
+        if (!this.selectionStart) return;
+        const endWorld = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+
+        // Create the mathematical rectangle
+        const selectionRect = Geom.Rectangle.FromXY(
+          this.selectionStart.x,
+          this.selectionStart.y,
+          endWorld.x,
+          endWorld.y,
+        );
+        if (selectionRect.width <= 5 && selectionRect.height <= 5)
+          this.gameManager.targetRobotSelection(
+            selectionRect.x,
+            selectionRect.y,
+          );
+        else this.gameManager.robotSelection(selectionRect);
+
+        // Now check your game objects
+        // Example: this.myGameObjects.filter(obj => selectionRect.contains(obj.x, obj.y))
+
+        if (!this.selectionGraphics) return;
+        this.selectionGraphics.clear();
+        this.selectionStart = null;
+      } else if (this.overlayAction == "mine") {
         if (!this.selectionStart) return;
         const endWorld = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
@@ -167,7 +245,7 @@ export class Game extends Scene {
       .text(
         this.cameras.main.width - 20, // Right-aligned, 20px padding
         20, // Top padding
-        "Currency: 0",
+        "crystite: 0",
         {
           fontSize: "24px",
           fontFamily: "custom",
@@ -289,7 +367,7 @@ export class Game extends Scene {
     if (!this.gameManager) return;
     this.gameManager.update(delta);
     if (this.currencyText)
-      this.currencyText.setText(`Currency: ${this.gameManager?.currency || 0}`);
+      this.currencyText.setText(`crystite: ${this.gameManager?.currency || 0}`);
 
     if (this.wasd) {
       if (this.wasd.Q.isDown) this.camera.scrollX -= this.cameraSpeed;

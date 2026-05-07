@@ -52,7 +52,10 @@ export default class WebTransportCommunication {
       return this.auth(userID, username);
     } catch (err) {
       this.transport = null;
-      return `[WebT] Error while trying to connect to ${this.gameServerURL}`;
+      console.log(
+        `[WebT] Error while trying to connect to ${this.gameServerURL}`,
+      );
+      return false;
     }
   }
 

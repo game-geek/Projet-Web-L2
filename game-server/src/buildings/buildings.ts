@@ -46,6 +46,7 @@ export const BuildingSnapshotFields = [
   "maxHp",
   "destroyed",
   "customState",
+  "ownerID",
 ] as const;
 
 export type BuildingSnapshot<K extends BuildingKind> = {
@@ -60,6 +61,7 @@ export type BuildingSnapshot<K extends BuildingKind> = {
   maxHp: number;
   destroyed: boolean;
   customState: Record<string, unknown>;
+  ownerID: number;
 };
 
 export class ServerBuilding<
@@ -83,6 +85,7 @@ export class ServerBuilding<
     public customState: Record<string, unknown>,
     public chunkPositioning: [number, number][] = [],
     public allDirtyChunks: DirtyBuildingChunkType[][][],
+    public ownerID: number,
   ) {
     this.updateFunction = BuildingSystems[kind];
   }
@@ -117,6 +120,7 @@ export function createBuilding<K extends BuildingKind>(
   id: number,
   chunkPositioning: [number, number][] = [],
   allDirtyChunks: DirtyBuildingChunkType[][][],
+  ownerID: number,
 ) {
   const def = BuildingDefs[kind].shared;
   const customDef = BuildingDefs[kind].server;
@@ -135,6 +139,7 @@ export function createBuilding<K extends BuildingKind>(
     customState,
     chunkPositioning,
     allDirtyChunks,
+    ownerID,
   );
 }
 export type AnyServerBuilding = ServerBuilding<BuildingKind>;
@@ -200,6 +205,7 @@ export class MapBuildings {
     x: number,
     y: number,
     id: number,
+    ownerID: number,
   ) {
     // verify if its position is correct w/ the map and if its a valid position
     const buildingWidth = BuildingDefs[kind].shared.w;
@@ -291,6 +297,7 @@ export class MapBuildings {
           id,
           this.chunkPositioningPerBuilding[id],
           this.allDirtyChunks,
+          ownerID,
         );
         // @ts-ignore
         if (this.buildings[map_y][map_x])

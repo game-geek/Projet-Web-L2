@@ -23,6 +23,7 @@ const IncomingDatagramSchema = z.object({
         hp: z.number().optional(),
         destroyed: z.boolean().optional(),
         customState: z.record(z.string(), z.any()).optional(),
+        ownerID: z.number().optional(),
       }),
     )
     .optional(),
@@ -40,6 +41,7 @@ const IncomingDatagramSchema = z.object({
         hp: z.number().optional(),
         destroyed: z.boolean().optional(),
         customState: z.record(z.string(), z.any()).optional(),
+        ownerID: z.number().optional(),
       }),
     )
     .optional(),
@@ -61,6 +63,8 @@ export const IncomingStreamSchema = z.object({
         hp: z.number().optional(),
         destroyed: z.boolean().optional(),
         customState: z.record(z.string(), z.any()).optional(),
+
+        ownerID: z.number().optional(),
       }),
     )
     .optional(),
@@ -78,6 +82,7 @@ export const IncomingStreamSchema = z.object({
         hp: z.number().optional(),
         destroyed: z.boolean().optional(),
         customState: z.record(z.string(), z.any()).optional(),
+        ownerID: z.number().optional(),
       }),
     )
     .optional(),
@@ -105,6 +110,7 @@ export const IncomingStreamSchema = z.object({
             hp: z.number(),
             destroyed: z.boolean(),
             customState: z.record(z.string(), z.any()),
+            ownerID: z.number(),
           }),
         )
         .optional(),
@@ -122,6 +128,7 @@ export const IncomingStreamSchema = z.object({
             hp: z.number(),
             destroyed: z.boolean(),
             customState: z.record(z.string(), z.any()),
+            ownerID: z.number(),
           }),
         )
         .optional(),
@@ -138,6 +145,7 @@ export const IncomingStreamSchema = z.object({
               connected: z.boolean(),
               ready: z.boolean(),
               color: z.string(),
+              ownerID: z.number(),
             }),
           ),
         })
@@ -157,6 +165,7 @@ export const IncomingStreamSchema = z.object({
         hp: z.number(),
         destroyed: z.boolean(),
         customState: z.record(z.string(), z.any()),
+        ownerID: z.number(),
       }),
     )
     .optional(),
@@ -174,6 +183,7 @@ export const IncomingStreamSchema = z.object({
         hp: z.number(),
         destroyed: z.boolean(),
         customState: z.record(z.string(), z.any()),
+        ownerID: z.number(),
       }),
     )
     .optional(),

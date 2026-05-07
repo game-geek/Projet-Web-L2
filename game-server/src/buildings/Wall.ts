@@ -2,7 +2,7 @@
 
 import { ServerBuilding } from "./buildings";
 
-export default function Wall(
-  building: ServerBuilding<"natural_wall">,
+export default function NaturalWall(
+  building: ServerBuilding<"wall">,
   dt: number,
 ) {}

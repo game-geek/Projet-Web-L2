@@ -7,11 +7,13 @@ import {
 } from "./buildings";
 import NaturalWall from "./NaturalWall";
 import Turret from "./Turret";
+import Wall from "./Wall";
 
 // buildings in the game with their variants
 export const BuildingVariantsMap = {
   natural_wall: ["1", "2", "3", "4", "5", "6", "7", "8"],
   turret: ["turret"],
+  wall: ["wall"],
 } as const; // "as const" is needed for the types match PERFECTLY their values, for ex "top" is "top" and not string
 
 // the default data related to those buildings
@@ -33,6 +35,20 @@ export const BuildingDefs = {
         "6": "assets/natural-tile6.png",
         "7": "assets/natural-tile7.png",
         "8": "assets/natural-tile8.png",
+      },
+      components: ["RenderStatic"] as const,
+    },
+  },
+  wall: {
+    shared: { maxHp: 10000, destructible: true, w: 1, h: 1 },
+    server: {
+      initState: () => ({
+        toMine: false,
+      }),
+    },
+    client: {
+      textures: {
+        wall: "assets/wall.png",
       },
       components: ["RenderStatic"] as const,
     },
@@ -81,4 +97,5 @@ export type BuildingSystemMapOf<K extends BuildingKind> = BuildingSystemMap[K];
 export const BuildingSystems: BuildingSystemMap = {
   natural_wall: NaturalWall,
   turret: Turret,
+  wall: Wall,
 } as const;

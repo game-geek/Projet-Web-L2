@@ -6,6 +6,7 @@ const mineElement = document.getElementById("mine") as HTMLDivElement;
 const minerElement = document.getElementById("miner") as HTMLDivElement;
 const eliptaeElement = document.getElementById("eliptae") as HTMLDivElement;
 const turretElement = document.getElementById("turret") as HTMLDivElement;
+const wallElement = document.getElementById("wall") as HTMLDivElement;
 
 mineElement.addEventListener("click", (e) => {
   gameManagerInstance.dispatchAction("mine");
@@ -22,12 +23,18 @@ turretElement.addEventListener("click", (e) => {
   gameManagerInstance.dispatchAction("turret");
 });
 
+wallElement.addEventListener("click", (e) => {
+  gameManagerInstance.dispatchAction("wall");
+});
 // for popup
 
 type LobbyState = NonNullable<z.infer<typeof IncomingStreamSchema>["a"]>["gs"];
 export type Player = NonNullable<
   NonNullable<z.infer<typeof IncomingStreamSchema>["a"]>["gs"]
 >["ps"][string];
+export type PlayersData = NonNullable<
+  NonNullable<z.infer<typeof IncomingStreamSchema>["a"]>["gs"]
+>["ps"];
 
 const popup = document.getElementById("echoPopup") as HTMLElement;
 const grid = document.getElementById("playersGrid") as HTMLElement;

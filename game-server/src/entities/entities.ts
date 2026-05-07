@@ -40,6 +40,7 @@ export type EntitySnapshot<K extends EntityKind> = {
   maxHp: number;
   destroyed: boolean;
   customState: Record<string, unknown>;
+  ownerID: number;
 };
 
 export const EnitiySnapshotFields = [
@@ -53,6 +54,7 @@ export const EnitiySnapshotFields = [
   "maxHp",
   "destroyed",
   "customState",
+  "ownerID",
 ] as const;
 
 export class ServerEntity<K extends EntityKind> implements EntitySnapshot<K> {
@@ -75,6 +77,7 @@ export class ServerEntity<K extends EntityKind> implements EntitySnapshot<K> {
       [id: number]: [number, number][];
     } = [],
     public allDirtyChunks: DirtyEntityChunkType[][][],
+    public ownerID: number,
   ) {
     this.updateFunction = EntitySystems[kind];
   }
@@ -109,6 +112,7 @@ export function createEntity<K extends EntityKind>(
     [id: number]: [number, number][];
   } = [],
   allDirtyChunks: DirtyEntityChunkType[][][],
+  ownerID: number,
 ) {
   const def = EntityDefs[kind].shared;
   const customDef = EntityDefs[kind].server;
@@ -126,6 +130,7 @@ export function createEntity<K extends EntityKind>(
     customState,
     chunkPositioning,
     allDirtyChunks,
+    ownerID,
   );
 }
 export type AnyServerEntity = ServerEntity<EntityKind>;
@@ -179,6 +184,7 @@ export class MapEntities {
     x: number,
     y: number,
     id: number,
+    ownerID: number,
   ) {
     // verify if its position is correct w/ the map and if its a valid position
     const entityWidth = EntityDefs[kind].shared.w;
@@ -202,6 +208,7 @@ export class MapEntities {
       id,
       this.chunkPositioningPerEntity,
       this.allDirtyChunks,
+      ownerID,
     );
     this.entities.set(id, newEntity);
     this.updateEntityChunks(newEntity);

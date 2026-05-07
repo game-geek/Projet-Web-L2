@@ -11,6 +11,7 @@ import {
   MAP_HEIGHT,
   MAP_WIDTH,
 } from "./buildings/globals";
+import { GLOBAL_USER_IDS, incrementGlobalUserIDs } from ".";
 
 export let GLOBAL_INDEX = 0;
 export function incrementGlobalIndex() {
@@ -191,7 +192,9 @@ export async function loadMap(mapPath: string, tilesetPaths: string[]) {
         x,
         y,
         i,
+        GLOBAL_USER_IDS,
       );
+      incrementGlobalUserIDs();
       if (res) console.error("Error while trying to parse prebuilt map: ", res);
     }
 

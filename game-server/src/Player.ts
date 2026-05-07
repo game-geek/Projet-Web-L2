@@ -62,6 +62,15 @@ const IncomingStreamSchema = z.object({
         )
         .optional(),
       r: z.boolean().optional(),
+      mE: z
+        .record(
+          z.number(),
+          z.object({
+            x: z.number(),
+            y: z.number(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
 });
@@ -95,6 +104,7 @@ export default class Player {
     public buildingsMap: MapBuildings,
     public entitiesMap: MapEntities,
     public color: string,
+    public readonly userID: number,
   ) {
     this.updateChunkView();
   }
@@ -127,7 +137,7 @@ export default class Player {
 
   updateClientBuildings(tick: number) {
     // if (!this.buildingsDeltaBuilder) return;
-
+    if (!this.userID) return;
     for (const buildingID of [...this.buildings]) {
       const b = this.buildingsMap.allBuildings.get(buildingID);
       if (!b) continue;
@@ -139,7 +149,6 @@ export default class Player {
             ([y, x]) => {
               for (const randomEntity of this.entitiesMap.entityChunks[y][x]) {
                 // @ts-ignore
-                if (b.customState.isShooting > 0) break;
                 if (this.entities.has(randomEntity.id)) continue;
                 else {
                   // check if in range
@@ -182,6 +191,8 @@ export default class Player {
                       trajectory.spawn.x,
                       trajectory.spawn.y,
                       GLOBAL_INDEX,
+                      // @ts-ignore
+                      this.userID,
                     );
                     this.entities.add(GLOBAL_INDEX);
                     const bullet = this.entitiesMap.entities.get(GLOBAL_INDEX);
@@ -201,6 +212,12 @@ export default class Player {
                   }
                 }
               }
+              if (found) return;
+            },
+          );
+
+          this.buildingsMap.chunkPositioningPerBuilding[b.id].forEach(
+            ([y, x]) => {
               if (found) return;
               // check for turrets
               for (
@@ -261,6 +278,8 @@ export default class Player {
                         trajectory.spawn.x,
                         trajectory.spawn.y,
                         GLOBAL_INDEX,
+                        // @ts-ignore
+                        this.userID,
                       );
                       this.entities.add(GLOBAL_INDEX);
                       const bullet =
@@ -274,7 +293,95 @@ export default class Player {
                       }
                       incrementGlobalIndex();
 
-                      b.customState.isShooting = 10;
+                      b.customState.isShooting = 5;
+                      b.markDirty("customState", b.customState);
+                      found = true;
+                      break;
+                    }
+                  }
+                }
+              }
+            },
+          );
+
+          this.buildingsMap.chunkPositioningPerBuilding[b.id].forEach(
+            ([y, x]) => {
+              if (found) return;
+              // check for turrets
+              for (
+                let _y = y * CHUNK_HEIGHT;
+                _y <
+                Math.min((y + 1) * CHUNK_HEIGHT, this.buildingsMap.mapHeight);
+                _y++
+              ) {
+                if (found) break;
+                for (
+                  let _x = x * CHUNK_WIDTH;
+                  _x <
+                  Math.min((x + 1) * CHUNK_WIDTH, this.buildingsMap.mapWidth);
+                  _x++
+                ) {
+                  if (found) break;
+                  const randomBuilding = this.buildingsMap.buildings[_y][_x];
+                  if (!randomBuilding) continue;
+                  if (this.buildings.has(randomBuilding.id)) continue;
+                  else if (randomBuilding.kind == "wall") {
+                    // check if in range
+                    if (
+                      randomBuilding.x * 32 <
+                        // @ts-ignore
+                        b.x * 32 + b.w * 32 + b.customState.area &&
+                      randomBuilding.x * 32 + randomBuilding.w * 32 >
+                        // @ts-ignore
+                        b.x * 32 - b.w * 32 - b.customState.area &&
+                      randomBuilding.y * 32 + randomBuilding.h * 32 >
+                        // @ts-ignore
+                        b.y * 32 - b.h * 32 - b.customState.area &&
+                      randomBuilding.y * 32 <
+                        // @ts-ignore
+                        b.y * 32 + b.h * 32 + +b.customState.area
+                    ) {
+                      // in range
+                      // fire bullet
+                      const trajectory = getBulletTrajectory(
+                        {
+                          x: b.x * 32,
+                          y: b.y * 32,
+                          w: b.w * 32,
+                          h: b.h * 32,
+                        },
+                        {
+                          x: randomBuilding.x * 32,
+                          y: randomBuilding.y * 32,
+                          w: randomBuilding.w * 32,
+                          h: randomBuilding.h * 32,
+                        },
+                        {
+                          w: 10,
+                          h: 10,
+                        },
+                      );
+                      this.entitiesMap.createAndAddEntity(
+                        "bullet",
+                        trajectory.spawn.x,
+                        trajectory.spawn.y,
+                        GLOBAL_INDEX,
+                        // @ts-ignore
+                        this.userID,
+                      );
+                      this.entities.add(GLOBAL_INDEX);
+                      const bullet =
+                        this.entitiesMap.entities.get(GLOBAL_INDEX);
+                      if (bullet) {
+                        bullet.customState.target = {
+                          x: trajectory.target.x,
+                          y: trajectory.target.y,
+                        };
+                        bullet.markDirty("customState", bullet.customState);
+                      }
+                      incrementGlobalIndex();
+
+                      b.customState.isShooting = 5;
                       b.markDirty("customState", b.customState);
                       found = true;
                       break;
@@ -291,13 +398,16 @@ export default class Player {
 
   updateClientEntities(tick: number) {
     // if (!this.buildingsDeltaBuilder) return;
+    if (!this.userID) return;
 
     for (const entityID of [...this.entities]) {
       const e = this.entitiesMap.entities.get(entityID);
       if (!e) continue;
       if (e.kind == "miner") {
-        if (true) {
-          //Object.keys(this.buildingsDeltaBuilder?.snapshot).length > 0
+        if (
+          !this.buildingsDeltaBuilder ||
+          Object.keys(this.buildingsDeltaBuilder.snapshot).length > 0
+        ) {
           if (e.customState.mining != true) {
             if (e.customState.target && e.customState.path) {
               // @ts-ignore
@@ -365,12 +475,16 @@ export default class Player {
           e.markDirty("customState", e.customState);
         }
       } else if (e.kind == "eliptae") {
-        if (true) {
-          //Object.keys(this.buildingsDeltaBuilder?.snapshot).length > 0
+        if (
+          !this.buildingsDeltaBuilder ||
+          Object.keys(this.buildingsDeltaBuilder.snapshot).length > 0
+        ) {
           if (
             e.customState.target &&
             // @ts-ignore
-            (e.customState.target.x != e.x || e.customState.target.y)
+            (e.customState.target.x != Math.floor(e.x / 32) ||
+              // @ts-ignore
+              e.customState.target.y != Math.floor(e.y / 32))
           ) {
             // recalculate path
 
@@ -383,10 +497,19 @@ export default class Player {
               MAP_WIDTH,
               MAP_HEIGHT,
               this.buildingsMap.buildings,
-              { x: e.x, y: e.y },
+              { x: Math.floor(e.x / 32), y: Math.floor(e.y / 32) },
               { x, y },
             );
             if (path) {
+              console.log(
+                "update path",
+                "target",
+                e.customState.target,
+                "position",
+                { x: Math.floor(e.x / 32), y: Math.floor(e.y / 32) },
+                "path",
+                path,
+              );
               e.customState.path = path;
               e.markDirty("customState", e.customState);
             }
@@ -395,73 +518,7 @@ export default class Player {
         let found = false;
         //@ts-ignore
         if (!e.customState.isShooting > 0) {
-          // search for entities in its chunks as its range is smaller than the chunksize
           this.entitiesMap.chunkPositioningPerEntity[e.id].forEach(([y, x]) => {
-            if (found) return;
-            for (const randomEntity of this.entitiesMap.entityChunks[y][x]) {
-              if (this.entities.has(randomEntity.id)) continue;
-              //@ts-ignore
-              if (e.customState.isShooting > 0) break;
-              else {
-                // check if in range
-                if (
-                  (randomEntity.kind == "miner" ||
-                    randomEntity.kind == "eliptae") &&
-                  // @ts-ignore
-                  randomEntity.x < e.x + e.w + e.customState.area &&
-                  randomEntity.x + randomEntity.w >
-                    // @ts-ignore
-                    e.x - e.w - e.customState.area &&
-                  randomEntity.y + randomEntity.h >
-                    // @ts-ignore
-                    e.y - e.h - e.customState.area &&
-                  // @ts-ignore
-                  randomEntity.y < e.y + e.h + +e.customState.area
-                ) {
-                  // in range
-                  // fire bullet
-                  const trajectory = getBulletTrajectory(
-                    {
-                      x: e.x,
-                      y: e.y,
-                      w: e.w,
-                      h: e.h,
-                    },
-                    {
-                      x: randomEntity.x,
-                      y: randomEntity.y,
-                      w: randomEntity.w,
-                      h: randomEntity.h,
-                    },
-                    {
-                      w: 10,
-                      h: 10,
-                    },
-                  );
-                  this.entitiesMap.createAndAddEntity(
-                    "bullet",
-                    trajectory.spawn.x,
-                    trajectory.spawn.y,
-                    GLOBAL_INDEX,
-                  );
-                  this.entities.add(GLOBAL_INDEX);
-                  const bullet = this.entitiesMap.entities.get(GLOBAL_INDEX);
-                  if (bullet) {
-                    bullet.customState.target = {
-                      x: trajectory.target.x,
-                      y: trajectory.target.y,
-                    };
-                    bullet.markDirty("customState", bullet.customState);
-                  }
-                  incrementGlobalIndex();
-
-                  e.customState.isShooting = 10;
-                  e.markDirty("customState", e.customState);
-                  found = true;
-                  break;
-                }
-              }
-            }
             // check for turrets
             if (found) return;
             for (
@@ -520,6 +577,162 @@ export default class Player {
                       trajectory.spawn.x,
                       trajectory.spawn.y,
                       GLOBAL_INDEX,
+                      //@ts-ignore
+                      this.userID,
+                    );
+                    this.entities.add(GLOBAL_INDEX);
+                    const bullet = this.entitiesMap.entities.get(GLOBAL_INDEX);
+                    if (bullet) {
+                      bullet.customState.target = {
+                        x: trajectory.target.x,
+                        y: trajectory.target.y,
+                      };
+                      bullet.markDirty("customState", bullet.customState);
+                    }
+                    incrementGlobalIndex();
+
+                    e.customState.isShooting = 10;
+                    e.markDirty("customState", e.customState);
+                    found = true;
+                    break;
+                  }
+                }
+              }
+            }
+          });
+
+          // search for entities in its chunks as its range is smaller than the chunksize
+          this.entitiesMap.chunkPositioningPerEntity[e.id].forEach(([y, x]) => {
+            if (found) return;
+            for (const randomEntity of this.entitiesMap.entityChunks[y][x]) {
+              if (this.entities.has(randomEntity.id)) continue;
+              //@ts-ignore
+              if (e.customState.isShooting > 0) break;
+              else {
+                // check if in range
+                if (
+                  (randomEntity.kind == "miner" ||
+                    randomEntity.kind == "eliptae") &&
+                  // @ts-ignore
+                  randomEntity.x < e.x + e.w + e.customState.area &&
+                  randomEntity.x + randomEntity.w >
+                    // @ts-ignore
+                    e.x - e.w - e.customState.area &&
+                  randomEntity.y + randomEntity.h >
+                    // @ts-ignore
+                    e.y - e.h - e.customState.area &&
+                  // @ts-ignore
+                  randomEntity.y < e.y + e.h + +e.customState.area
+                ) {
+                  // in range
+                  // fire bullet
+                  const trajectory = getBulletTrajectory(
+                    {
+                      x: e.x,
+                      y: e.y,
+                      w: e.w,
+                      h: e.h,
+                    },
+                    {
+                      x: randomEntity.x,
+                      y: randomEntity.y,
+                      w: randomEntity.w,
+                      h: randomEntity.h,
+                    },
+                    {
+                      w: 10,
+                      h: 10,
+                    },
+                  );
+                  this.entitiesMap.createAndAddEntity(
+                    "bullet",
+                    trajectory.spawn.x,
+                    trajectory.spawn.y,
+                    GLOBAL_INDEX,
+                    // @ts-ignore
+                    this.userID,
+                  );
+                  this.entities.add(GLOBAL_INDEX);
+                  const bullet = this.entitiesMap.entities.get(GLOBAL_INDEX);
+                  if (bullet) {
+                    bullet.customState.target = {
+                      x: trajectory.target.x,
+                      y: trajectory.target.y,
+                    };
+                    bullet.markDirty("customState", bullet.customState);
+                  }
+                  incrementGlobalIndex();
+
+                  e.customState.isShooting = 10;
+                  e.markDirty("customState", e.customState);
+                  found = true;
+                  break;
+                }
+              }
+            }
+          });
+
+          this.entitiesMap.chunkPositioningPerEntity[e.id].forEach(([y, x]) => {
+            // check for turrets
+            if (found) return;
+            for (
+              let _y = y * CHUNK_HEIGHT;
+              _y <
+              Math.min((y + 1) * CHUNK_HEIGHT, this.buildingsMap.mapHeight);
+              _y++
+            ) {
+              if (found) break;
+              for (
+                let _x = x * CHUNK_WIDTH;
+                _x <
+                Math.min((x + 1) * CHUNK_WIDTH, this.buildingsMap.mapWidth);
+                _x++
+              ) {
+                if (found) break;
+                const randomBuilding = this.buildingsMap.buildings[_y][_x];
+                if (!randomBuilding) continue;
+                if (this.buildings.has(randomBuilding.id)) continue;
+                else if (randomBuilding.kind == "wall") {
+                  // check if in range
+                  if (
+                    // @ts-ignore
+                    randomBuilding.x * 32 < e.x + e.w + e.customState.area &&
+                    randomBuilding.x * 32 + randomBuilding.w * 32 >
+                      // @ts-ignore
+                      e.x - e.w - e.customState.area &&
+                    randomBuilding.y * 32 + randomBuilding.h * 32 >
+                      // @ts-ignore
+                      e.y - e.h - e.customState.area &&
+                    // @ts-ignore
+                    randomBuilding.y * 32 < e.y + e.h + +e.customState.area
+                  ) {
+                    // in range
+                    // fire bullet
+                    const trajectory = getBulletTrajectory(
+                      {
+                        x: e.x,
+                        y: e.y,
+                        w: e.w,
+                        h: e.h,
+                      },
+                      {
+                        x: randomBuilding.x * 32,
+                        y: randomBuilding.y * 32,
+                        w: randomBuilding.w * 32,
+                        h: randomBuilding.h * 32,
+                      },
+                      {
+                        w: 10,
+                        h: 10,
+                      },
+                    );
+                    this.entitiesMap.createAndAddEntity(
+                      "bullet",
+                      trajectory.spawn.x,
+                      trajectory.spawn.y,
+                      GLOBAL_INDEX,
+                      //@ts-ignore
+                      this.userID,
                     );
                     this.entities.add(GLOBAL_INDEX);
                     const bullet = this.entitiesMap.entities.get(GLOBAL_INDEX);
@@ -555,13 +768,16 @@ export default class Player {
         }
         // check for collisions
         let found = false;
-        if (!e.customState.target) {
+        if (true) {
           // search for entities in its chunks as its range is smaller than the chunksize
           this.entitiesMap.chunkPositioningPerEntity[e.id].forEach(([y, x]) => {
             if (found) return;
             for (const randomEntity of this.entitiesMap.entityChunks[y][x]) {
               if (this.entities.has(randomEntity.id)) continue;
-              else {
+              else if (
+                randomEntity.kind == "eliptae" ||
+                randomEntity.kind == "miner"
+              ) {
                 // check if in range
                 if (
                   isColliding(
@@ -597,64 +813,118 @@ export default class Player {
                 }
               }
             }
+          });
 
-            // for turrets
-            if (found) return;
+          // for turrets
+          if (found) continue;
 
-            for (
-              let _y = y * CHUNK_HEIGHT;
-              _y <
-              Math.min((y + 1) * CHUNK_HEIGHT, this.buildingsMap.mapHeight);
-              _y++
+          const buildings: Set<AnyServerBuilding | null> = new Set();
+          buildings.add(
+            this.buildingsMap.buildings[Math.floor(e.y / 32)][
+              Math.floor(e.x / 32)
+            ],
+          );
+
+          buildings.add(
+            this.buildingsMap.buildings[Math.ceil(e.y / 32)][
+              Math.floor(e.x / 32)
+            ],
+          );
+
+          buildings.add(
+            this.buildingsMap.buildings[Math.floor(e.y / 32)][
+              Math.ceil(e.x / 32)
+            ],
+          );
+
+          buildings.add(
+            this.buildingsMap.buildings[Math.ceil(e.y / 32)][
+              Math.ceil(e.x / 32)
+            ],
+          );
+
+          for (const randomBuilding of buildings) {
+            if (found) break;
+            if (!randomBuilding) continue;
+            if (this.buildings.has(randomBuilding.id)) continue;
+            else if (
+              randomBuilding.kind == "turret" &&
+              !this.buildings.has(randomBuilding.id)
             ) {
-              if (found) break;
-              for (
-                let _x = x * CHUNK_WIDTH;
-                _x <
-                Math.min((x + 1) * CHUNK_WIDTH, this.buildingsMap.mapWidth);
-                _x++
+              // check if in range
+              if (
+                isColliding(
+                  {
+                    x: e.x,
+                    y: e.y,
+                    w: e.w,
+                    h: e.h,
+                  },
+                  {
+                    x: randomBuilding.x * 32,
+                    y: randomBuilding.y * 32,
+                    w: randomBuilding.w * 32,
+                    h: randomBuilding.h * 32,
+                  },
+                )
               ) {
-                if (found) break;
-                const randomBuilding = this.buildingsMap.buildings[_y][_x];
-                if (!randomBuilding) continue;
-                if (this.buildings.has(randomBuilding.id)) continue;
-                else if (randomBuilding.kind == "turret") {
-                  // check if in range
-                  if (
-                    isColliding(
-                      {
-                        x: e.x,
-                        y: e.y,
-                        w: e.w,
-                        h: e.h,
-                      },
-                      {
-                        x: randomBuilding.x * 32,
-                        y: randomBuilding.y * 32,
-                        w: randomBuilding.w * 32,
-                        h: randomBuilding.h * 32,
-                      },
-                    )
-                  ) {
-                    // in enemy hitbox
-                    // destroy bullet
-                    this.entitiesMap.removeEntity(e.id);
+                // in enemy hitbox
+                // destroy bullet
+                this.entitiesMap.removeEntity(e.id);
 
-                    // apply some damage to entity
-                    console.log("HIT turret", randomBuilding.hp);
-                    // @ts-ignore
-                    randomBuilding.hp -= e.customState.damage;
-                    randomBuilding.markDirty("hp", randomBuilding.hp);
-                    if (randomBuilding.hp <= 0) {
-                      this.buildingsMap.removeBuildind(randomBuilding.id);
-                    }
-                    found = true;
-                    break;
-                  }
+                // apply some damage to entity
+                console.log("HIT turret", randomBuilding.hp);
+                // @ts-ignore
+                randomBuilding.hp -= e.customState.damage;
+                randomBuilding.markDirty("hp", randomBuilding.hp);
+                if (randomBuilding.hp <= 0) {
+                  this.buildingsMap.removeBuildind(randomBuilding.id);
                 }
+                found = true;
+                break;
               }
             }
-          });
+          }
+
+          for (const randomBuilding of buildings) {
+            if (found) break;
+            if (!randomBuilding) continue;
+            if (this.buildings.has(randomBuilding.id)) continue;
+            else if (randomBuilding.kind == "wall") {
+              // check if in range
+              if (
+                isColliding(
+                  {
+                    x: e.x,
+                    y: e.y,
+                    w: e.w,
+                    h: e.h,
+                  },
+                  {
+                    x: randomBuilding.x * 32,
+                    y: randomBuilding.y * 32,
+                    w: randomBuilding.w * 32,
+                    h: randomBuilding.h * 32,
+                  },
+                )
+              ) {
+                // in enemy hitbox
+                // destroy bullet
+                this.entitiesMap.removeEntity(e.id);
+
+                // apply some damage to entity
+                console.log("HIT wall", randomBuilding.hp);
+                // @ts-ignore
+                randomBuilding.hp -= e.customState.damage;
+                randomBuilding.markDirty("hp", randomBuilding.hp);
+                if (randomBuilding.hp <= 0) {
+                  this.buildingsMap.removeBuildind(randomBuilding.id);
+                }
+                found = true;
+                break;
+              }
+            }
+          }
         }
       }
     }
@@ -842,6 +1112,7 @@ export default class Player {
   }
 
   processStreams(tick: number) {
+    if (!this.userID) return;
     if (!this.session) return;
     if (this.session.incomingStreams.size == 0) return;
     for (const stream of this.session.incomingStreams) {
@@ -860,6 +1131,7 @@ export default class Player {
               Math.floor(spawnAction.x),
               Math.floor(spawnAction.y),
               GLOBAL_INDEX,
+              this.userID,
             );
             this.entities.add(GLOBAL_INDEX);
             incrementGlobalIndex();
@@ -874,6 +1146,7 @@ export default class Player {
               Math.floor(spawnAction.x),
               Math.floor(spawnAction.y),
               GLOBAL_INDEX,
+              this.userID,
             );
             this.entities.add(GLOBAL_INDEX);
             incrementGlobalIndex();
@@ -893,13 +1166,27 @@ export default class Player {
             //@ts-ignore
             if (!BuildingVariantsMap[spawnAction.n].includes(spawnAction.v))
               continue;
+            if (
+              spawnAction.x < 0 ||
+              spawnAction.y < 0 ||
+              spawnAction.x > this.buildingsMap.mapWidth * 32 ||
+              spawnAction.y > this.buildingsMap.mapHeight * 32
+            )
+              continue;
+            if (
+              this.buildingsMap.buildings[Math.floor(spawnAction.y / 32)][
+                Math.floor(spawnAction.x / 32)
+              ]
+            )
+              continue;
             this.buildingsMap.createAndAddBuilding(
               spawnAction.n,
               //@ts-ignore
               spawnAction.v,
-              Math.floor(spawnAction.x),
-              Math.floor(spawnAction.y),
+              Math.floor(spawnAction.x / 32),
+              Math.floor(spawnAction.y / 32),
               GLOBAL_INDEX,
+              this.userID,
             );
             this.buildings.add(GLOBAL_INDEX);
             incrementGlobalIndex();
@@ -907,9 +1194,90 @@ export default class Player {
             if (!this.serverStream) this.serverStream = { t: tick };
             if (!this.serverStream.a) this.serverStream.a = {};
             this.serverStream.a.c = this.currency;
+          } else if (spawnAction.n == "wall" && this.currency >= 10) {
+            //@ts-ignore
+            if (!BuildingVariantsMap[spawnAction.n].includes(spawnAction.v))
+              continue;
+
+            if (
+              spawnAction.x < 0 ||
+              spawnAction.y < 0 ||
+              spawnAction.x > this.buildingsMap.mapWidth * 32 ||
+              spawnAction.y > this.buildingsMap.mapHeight * 32
+            )
+              continue;
+            if (
+              this.buildingsMap.buildings[Math.floor(spawnAction.y / 32)][
+                Math.floor(spawnAction.x / 32)
+              ]
+            )
+              continue;
+            console.log("ADDING WALL BUILDING");
+            this.buildingsMap.createAndAddBuilding(
+              spawnAction.n,
+              //@ts-ignore
+              spawnAction.v,
+              Math.floor(spawnAction.x / 32),
+              Math.floor(spawnAction.y / 32),
+              GLOBAL_INDEX,
+              this.userID,
+            );
+            this.buildings.add(GLOBAL_INDEX);
+            incrementGlobalIndex();
+            this.currency -= 10;
+            if (!this.serverStream) this.serverStream = { t: tick };
+            if (!this.serverStream.a) this.serverStream.a = {};
+            this.serverStream.a.c = this.currency;
           }
         }
         this.updateClientMinerEntities();
+      }
+
+      if (parsedStream && parsedStream.a && parsedStream.a.mE) {
+        for (const [entityID, target] of Object.entries(parsedStream.a.mE)) {
+          if (
+            target.x < 0 ||
+            target.y < 0 ||
+            target.x > this.buildingsMap.mapWidth * 32 ||
+            target.y > this.buildingsMap.mapHeight * 32
+          )
+            continue;
+          if (
+            this.buildingsMap.buildings[Math.floor(target.y / 32)][
+              Math.floor(target.x / 32)
+            ]
+          )
+            continue;
+          const e = this.entitiesMap.entities.get(parseInt(entityID));
+          if (!e) continue;
+
+          e.customState.target = {
+            x: Math.floor(target.x / 32),
+            y: Math.floor(target.y / 32),
+          };
+          e.markDirty("customState", e.customState);
+
+          const path = findPath(
+            MAP_WIDTH,
+            MAP_HEIGHT,
+            this.buildingsMap.buildings,
+            { x: Math.floor(e.x / 32), y: Math.floor(e.y / 32) },
+            { x: Math.floor(target.x / 32), y: Math.floor(target.y / 32) },
+          );
+          if (path) {
+            console.log(
+              "new path",
+              "target",
+              e.customState.target,
+              "position",
+              { x: Math.floor(e.x / 32), y: Math.floor(e.y / 32) },
+              "path",
+              path,
+            );
+            e.customState.path = path;
+            e.markDirty("customState", e.customState);
+          }
+        }
       }
       this.session.incomingStreams.delete(stream);
     }
@@ -1094,7 +1462,6 @@ export default class Player {
       if (!this.serverStream.a) this.serverStream.a = {};
       this.serverStream.a.rE = [...this.entitiesMap.removedEntities];
     }
-
     if (Object.keys(this.serverStream).length > 1)
       this.session.sendStreamJSON(this.serverStream);
 
@@ -1127,6 +1494,7 @@ export default class Player {
           connected: !p.session.closed,
           ready: p.playerReady,
           color: p.color,
+          ownerID: p.userID,
         };
       });
 
@@ -1198,7 +1566,9 @@ function findPath(
         path.push({ x: currIdx % width, y: Math.floor(currIdx / width) });
         currIdx = parents.get(currIdx)!;
       }
-      return path.reverse();
+      const new_path = path.reverse();
+      new_path.shift();
+      return new_path;
     }
 
     // // Neighbors (8-way)

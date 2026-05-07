@@ -9,6 +9,7 @@ import {
   EntitySnapshot,
 } from "../../../../game-server/src/entities/entities";
 import { EntityDefs } from "../../../../game-server/src/entities/globals";
+import EntitySelectedOverlay from "./EntitySelectedOverlay";
 import Render from "./Render";
 
 export type DeltaField =
@@ -18,7 +19,8 @@ export type DeltaField =
   | "y"
   | "w"
   | "h"
-  | "customState.repairProgress";
+  | "customState"
+  | "ownerID";
 
 export type Component = {
   onDelta: (delta: Partial<Record<DeltaField, any>>) => void;
@@ -26,8 +28,9 @@ export type Component = {
   destroy: () => void;
 };
 
-export const componentRegistry = {
+export const entitiesComponentRegistry = {
   Render: Render,
+  EntitySelectedOverlay: EntitySelectedOverlay,
 } as const;
 export class ClientEntity<K extends EntityKind> {
   public components: Map<string, Component> = new Map();
@@ -44,6 +47,7 @@ export class ClientEntity<K extends EntityKind> {
     public maxHp: number,
     public destroyed: boolean,
     public customState: Record<number, unknown>,
+    public ownerID: number,
   ) {
     console.log("entity spawn");
   }
@@ -110,16 +114,19 @@ export class MapEntities {
   }
 
   addComponent(
-    buildingID: number,
-    name: keyof typeof componentRegistry,
-    Comp: (typeof componentRegistry)[keyof typeof componentRegistry],
+    entityID: number,
+    name: keyof typeof entitiesComponentRegistry,
+    Comp: (typeof entitiesComponentRegistry)[keyof typeof entitiesComponentRegistry],
     scene: Phaser.Scene,
   ) {
-    const b = this.entities.get(buildingID);
+    const b = this.entities.get(entityID);
     if (b && !b.components.has(name)) b.addComponent(name, new Comp(b, scene));
   }
-  removeComponent(buildingID: number, name: keyof typeof componentRegistry) {
-    const b = this.entities.get(buildingID);
+  removeComponent(
+    entityID: number,
+    name: keyof typeof entitiesComponentRegistry,
+  ) {
+    const b = this.entities.get(entityID);
     if (b) b.removeComponent(name);
   }
 }
@@ -127,7 +134,8 @@ export function issueEntityDeltaUpdate(
   entity: ClientEntity<EntityKind>,
   snapshot: Partial<EntitySnapshot<EntityKind>>,
 ) {
-  for (const field in EnitiySnapshotFields) {
+  for (const field of EnitiySnapshotFields) {
+    if (!(field in snapshot)) continue;
     if (field == "customState") {
       // @ts-ignore
       entity[field] = structuredClone(snapshot[field]);
@@ -135,9 +143,10 @@ export function issueEntityDeltaUpdate(
     // @ts-ignore
     entity[field] = snapshot[field];
   }
+  console.log("dela", snapshot.x, entity.x);
   entity.components.forEach((comp) => comp.onDelta(snapshot));
 }
-export function issueSnapshotUpdate(
+export function issueEntitiesSnapshotUpdate(
   entity: ClientEntity<EntityKind>,
   snapshot: EntitySnapshot<EntityKind>,
 ) {
@@ -169,14 +178,15 @@ export function createClientEntity(
     dto.maxHp,
     dto.destroyed,
     dto.customState,
+    dto.ownerID,
   );
 
   // add components
 
   def.client.components.forEach((componentName) => {
-    if (componentName in componentRegistry) {
+    if (componentName in entitiesComponentRegistry) {
       // add the component
-      const Comp = componentRegistry[componentName];
+      const Comp = entitiesComponentRegistry[componentName];
       entity.addComponent(componentName, new Comp(entity, scene));
     }
   });

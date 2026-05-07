@@ -16,7 +16,8 @@ export type DeltaField =
   | "y"
   | "w"
   | "h"
-  | "customState.repairProgress";
+  | "customState"
+  | "ownerID";
 
 export type Component = {
   onDelta: (delta: Partial<Record<DeltaField, any>>) => void;
@@ -24,7 +25,7 @@ export type Component = {
   destroy: () => void;
 };
 
-export const componentRegistry = {
+export const buildingsComponentRegistry = {
   RenderStatic: RenderStatic,
   MiningOverlay: MiningOverlay,
 };
@@ -44,6 +45,7 @@ export class ClientBuilding<K extends BuildingKind> {
     public maxHp: number,
     public destroyed: boolean,
     public customState: Record<number, unknown>,
+    public ownerID: number,
   ) {}
 
   addComponent(name: string, component: Component) {
@@ -135,23 +137,29 @@ export class MapBuildings {
 
   addComponent(
     buildingID: number,
-    name: keyof typeof componentRegistry,
-    Comp: (typeof componentRegistry)[keyof typeof componentRegistry],
+    name: keyof typeof buildingsComponentRegistry,
+    Comp: (typeof buildingsComponentRegistry)[keyof typeof buildingsComponentRegistry],
     scene: Phaser.Scene,
   ) {
     const b = this.buildings.get(buildingID);
     if (b && !b.components.has(name)) b.addComponent(name, new Comp(b, scene));
   }
-  removeComponent(buildingID: number, name: keyof typeof componentRegistry) {
+  removeComponent(
+    buildingID: number,
+    name: keyof typeof buildingsComponentRegistry,
+  ) {
     const b = this.buildings.get(buildingID);
-    if (b) b.removeComponent(name);
+    if (b) {
+      b.removeComponent(name);
+    }
   }
 }
 export function issueBuildingDeltaUpdate(
   building: ClientBuilding<BuildingKind>,
   snapshot: Partial<BuildingSnapshot<BuildingKind>>,
 ) {
-  for (const field in BuildingSnapshotFields) {
+  for (const field of BuildingSnapshotFields) {
+    if (!(field in snapshot)) continue;
     if (field == "customState") {
       // @ts-ignore
       building[field] = structuredClone(snapshot[field]);
@@ -161,7 +169,7 @@ export function issueBuildingDeltaUpdate(
   }
   building.components.forEach((comp) => comp.onDelta(snapshot));
 }
-export function issueSnapshotUpdate(
+export function issueBuildingsSnapshotUpdate(
   building: ClientBuilding<BuildingKind>,
   snapshot: BuildingSnapshot<BuildingKind>,
 ) {
@@ -194,14 +202,15 @@ export function createClientBuilding(
     dto.maxHp,
     dto.destroyed,
     dto.customState,
+    dto.ownerID,
   );
 
   // add components
 
   def.client.components.forEach((componentName) => {
-    if (componentName in componentRegistry) {
+    if (componentName in buildingsComponentRegistry) {
       // add the component
-      const Comp = componentRegistry[componentName];
+      const Comp = buildingsComponentRegistry[componentName];
       building.addComponent(componentName, new Comp(building, scene));
     }
   });

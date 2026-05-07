@@ -6,7 +6,7 @@ import Miner from "./Miner";
 // the default data related to those buildings
 export const EntityDefs = {
   eliptae: {
-    shared: { maxHp: 100, killable: true, w: 1, h: 1 },
+    shared: { maxHp: 100, killable: true, w: 30, h: 30 },
     server: {
       initState: () => ({
         path: [],
@@ -23,7 +23,7 @@ export const EntityDefs = {
     },
   },
   bullet: {
-    shared: { maxHp: 100, killable: true, w: 10, h: 10 },
+    shared: { maxHp: 100, killable: true, w: 4, h: 14 },
     server: {
       initState: () => ({
         target: null,

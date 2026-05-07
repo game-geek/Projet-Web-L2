@@ -1,32 +1,15 @@
 import "./app";
 import { newPlayerSessions } from "./app";
 import { MapEntities } from "./entities/entities";
+import { gameColors } from "./globals";
 import { GLOBAL_INDEX, incrementGlobalIndex, loadMap } from "./loadMap";
 import Player from "./Player";
 
-const gameColors: string[] = [
-  "#FF0000", // bright red
-  "#00FF00", // lime green
-  "#0000FF", // royal blue
-  "#FFFF00", // yellow
-  "#FF00FF", // magenta
-  "#00FFFF", // cyan
-  "#FFA500", // orange
-  "#800080", // purple
-  "#00FF7F", // spring green
-  "#FF4500", // orange red
-  "#32CD32", // lime green
-  "#1E90FF", // dodger blue
-  "#FF69B4", // hot pink
-  "#FFD700", // gold
-  "#ADFF2F", // green yellow
-  "#FF1493", // deep pink
-  "#00BFFF", // deep sky blue
-  "#7CFC00", // lawn green
-  "#FF6347", // tomato
-  "#8A2BE2", // blue violet
-];
 let gameColorAt = 0;
+export let GLOBAL_USER_IDS = 0;
+export function incrementGlobalUserIDs() {
+  GLOBAL_USER_IDS += 1;
+}
 
 // Load Tiled map
 const serverBuildingsMap = await loadMap(
@@ -48,32 +31,34 @@ const ai = new Player(
   serverBuildingsMap,
   serverEntitiesMap,
   gameColors[gameColorAt],
+  gameColorAt,
 );
+
 gameColorAt += 1;
 
-serverEntitiesMap.createAndAddEntity("eliptae", 50 * 32, 50 * 32, GLOBAL_INDEX);
-ai.entities.add(GLOBAL_INDEX);
-incrementGlobalIndex();
-serverEntitiesMap.createAndAddEntity("eliptae", 52 * 32, 50 * 32, GLOBAL_INDEX);
-ai.entities.add(GLOBAL_INDEX);
-incrementGlobalIndex();
-serverEntitiesMap.createAndAddEntity("eliptae", 50 * 32, 52 * 32, GLOBAL_INDEX);
-ai.entities.add(GLOBAL_INDEX);
-incrementGlobalIndex();
-serverEntitiesMap.createAndAddEntity("eliptae", 54 * 32, 52 * 32, GLOBAL_INDEX);
-ai.entities.add(GLOBAL_INDEX);
-incrementGlobalIndex();
-serverEntitiesMap.createAndAddEntity("eliptae", 54 * 32, 52 * 32, GLOBAL_INDEX);
-ai.entities.add(GLOBAL_INDEX);
-incrementGlobalIndex();
-serverBuildingsMap.createAndAddBuilding(
-  "turret",
-  "turret",
-  14,
-  14,
-  GLOBAL_INDEX,
-);
-incrementGlobalIndex();
+// serverEntitiesMap.createAndAddEntity("eliptae", 50 * 32, 50 * 32, GLOBAL_INDEX);
+// ai.entities.add(GLOBAL_INDEX);
+// incrementGlobalIndex();
+// serverEntitiesMap.createAndAddEntity("eliptae", 52 * 32, 50 * 32, GLOBAL_INDEX);
+// ai.entities.add(GLOBAL_INDEX);
+// incrementGlobalIndex();
+// serverEntitiesMap.createAndAddEntity("eliptae", 50 * 32, 52 * 32, GLOBAL_INDEX);
+// ai.entities.add(GLOBAL_INDEX);
+// incrementGlobalIndex();
+// serverEntitiesMap.createAndAddEntity("eliptae", 54 * 32, 52 * 32, GLOBAL_INDEX);
+// ai.entities.add(GLOBAL_INDEX);
+// incrementGlobalIndex();
+// serverEntitiesMap.createAndAddEntity("eliptae", 54 * 32, 52 * 32, GLOBAL_INDEX);
+// ai.entities.add(GLOBAL_INDEX);
+// incrementGlobalIndex();
+// serverBuildingsMap.createAndAddBuilding(
+//   "turret",
+//   "turret",
+//   14,
+//   14,
+//   GLOBAL_INDEX,
+// );
+// incrementGlobalIndex();
 
 let tick = 1;
 const MAX_PLAYERS = 4;
@@ -98,6 +83,7 @@ function checkForNewSessions() {
             serverBuildingsMap,
             serverEntitiesMap,
             gameColors[gameColorAt],
+            gameColorAt,
           );
           gameColorAt += 1;
           players.set(newSession.userID, p);
@@ -121,6 +107,7 @@ function checkForNewSessions() {
           serverBuildingsMap,
           serverEntitiesMap,
           gameColors[gameColorAt],
+          gameColorAt,
         );
         gameColorAt += 1;
         players.set(newSession.userID, p);
@@ -226,7 +213,7 @@ function update() {
     } else {
       // before game
       // check if we can start the game
-      if (connectedReadyPlayers.size >= 2) {
+      if (connectedReadyPlayers.size >= 1) {
         gameStarted = true;
         playerEvent = true;
       }

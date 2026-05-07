@@ -1,24 +1,41 @@
 import { Geom } from "phaser";
 import { BuildingSnapshotFields } from "../../../game-server/src/buildings/buildings";
 import {
+  CHUNK_HEIGHT,
+  CHUNK_WIDTH,
   MAP_HEIGHT,
   MAP_WIDTH,
 } from "../../../game-server/src/buildings/globals";
 import serverCommunication from "../serverCommunication";
 import {
-  componentRegistry,
+  buildingsComponentRegistry,
   createClientBuilding,
   issueBuildingDeltaUpdate,
-  issueSnapshotUpdate,
   MapBuildings,
 } from "./buildings/buildings";
 import { ClientStreamtype } from "../../../game-server/src/Player";
 import {
   createClientEntity,
+  entitiesComponentRegistry,
+  issueEntitiesSnapshotUpdate,
   issueEntityDeltaUpdate,
   MapEntities,
 } from "./entities/entities";
-import { closePopup, loadAndOpen, updatePlayerBanner } from "../interfaceUI";
+import {
+  closePopup,
+  loadAndOpen,
+  PlayersData,
+  updatePlayerBanner,
+} from "../interfaceUI";
+type EntityBounds = { x: number; y: number; w: number; h: number };
+function isColliding(bullet: EntityBounds, target: EntityBounds): boolean {
+  return (
+    bullet.x < target.x + target.w &&
+    bullet.x + bullet.w > target.x &&
+    bullet.y < target.y + target.h &&
+    bullet.y + bullet.h > target.y
+  );
+}
 
 export default class gameManager {
   public clientBuildingsMap = new MapBuildings(MAP_WIDTH, MAP_HEIGHT);
@@ -37,7 +54,9 @@ export default class gameManager {
     buildingsToMine: new Map(),
   };
   public buildingsToMine: Set<number> = new Set();
+  public entitiesSelected: Set<number> = new Set();
   public gameStarted = false;
+  public playersData: PlayersData = {};
   currency = 0;
 
   constructor(public server: serverCommunication) {}
@@ -53,7 +72,9 @@ export default class gameManager {
     this.clientStream.a.r = ready;
   }
 
-  dispatchAction(action: null | "mine" | "miner" | "eliptae" | "turret") {
+  dispatchAction(
+    action: null | "mine" | "miner" | "eliptae" | "turret" | "wall",
+  ) {
     if (!this.scene) return;
     // @ts-ignore
     if (action == "mine") this.scene.setOverlayAction(action);
@@ -63,9 +84,45 @@ export default class gameManager {
     else if (action == "eliptae") this.scene.setOverlayAction(action);
     // @ts-ignore
     else if (action == "turret") this.scene.setOverlayAction(action);
+    // @ts-ignore
+    else if (action == "wall") this.scene.setOverlayAction(action);
+  }
+
+  spawnWall(x: number, y: number) {
+    if (
+      x < 0 ||
+      y < 0 ||
+      x > this.clientEntitiesMap.width * 32 ||
+      y > this.clientEntitiesMap.height * 32
+    )
+      return;
+    if (
+      this.clientBuildingsMap.buildingsMap[Math.floor(y / 32)][
+        Math.floor(x / 32)
+      ]
+    )
+      return;
+    // spawn wall
+    if (!this.clientStream) this.clientStream = { t: this.tick };
+    if (!this.clientStream.a) this.clientStream.a = {};
+    if (!this.clientStream.a.spB) this.clientStream.a.spB = [];
+    this.clientStream.a.spB.push({ n: "wall", v: "wall", x, y });
   }
 
   spawnMiner(x: number, y: number) {
+    if (
+      x < 0 ||
+      y < 0 ||
+      x > this.clientEntitiesMap.width * 32 ||
+      y > this.clientEntitiesMap.height * 32
+    )
+      return;
+    if (
+      this.clientBuildingsMap.buildingsMap[Math.floor(y / 32)][
+        Math.floor(x / 32)
+      ]
+    )
+      return;
     // spawn miner
     if (!this.clientStream) this.clientStream = { t: this.tick };
     if (!this.clientStream.a) this.clientStream.a = {};
@@ -74,6 +131,13 @@ export default class gameManager {
   }
 
   spawnEliptae(x: number, y: number) {
+    if (
+      x < 0 ||
+      y < 0 ||
+      x > this.clientEntitiesMap.width * 32 ||
+      y > this.clientEntitiesMap.height * 32
+    )
+      return;
     // spawn miner
     if (!this.clientStream) this.clientStream = { t: this.tick };
     if (!this.clientStream.a) this.clientStream.a = {};
@@ -82,6 +146,19 @@ export default class gameManager {
   }
 
   spawnTurret(x: number, y: number) {
+    if (
+      x < 0 ||
+      y < 0 ||
+      x > this.clientEntitiesMap.width * 32 ||
+      y > this.clientEntitiesMap.height * 32
+    )
+      return;
+    if (
+      this.clientBuildingsMap.buildingsMap[Math.floor(y / 32)][
+        Math.floor(x / 32)
+      ]
+    )
+      return;
     // spawn miner
     if (!this.clientStream) this.clientStream = { t: this.tick };
     if (!this.clientStream.a) this.clientStream.a = {};
@@ -89,9 +166,104 @@ export default class gameManager {
     this.clientStream.a.spB.push({
       n: "turret",
       v: "turret",
-      x: Math.floor(x / 32),
-      y: Math.floor(y / 32),
+      x: Math.floor(x),
+      y: Math.floor(y),
     });
+  }
+
+  clearRobotSelection() {
+    this.updateSelectedEntitiesOverlay(new Set());
+  }
+
+  targetRobotSelection(x: number, y: number) {
+    if (
+      x < 0 ||
+      y < 0 ||
+      x > this.clientEntitiesMap.width * 32 ||
+      y > this.clientEntitiesMap.height * 32
+    )
+      return;
+    console.log("setting target");
+    if (!this.clientStream) this.clientStream = { t: this.tick };
+    if (!this.clientStream.a) this.clientStream.a = {};
+    if (!this.clientStream.a.mE) this.clientStream.a.mE = {};
+    for (const entityID of this.entitiesSelected) {
+      this.clientStream.a.mE[entityID] = {
+        x: x,
+        y: y,
+      };
+    }
+  }
+
+  robotSelection(selection: Geom.Rectangle) {
+    if (!this.playersData || !this.server.userID) return;
+    if (
+      selection.x < 0 ||
+      selection.y < 0 ||
+      selection.width > this.clientEntitiesMap.width * 32 ||
+      selection.height > this.clientEntitiesMap.height * 32
+    )
+      return;
+    // find robot entities
+    //   for (
+    //     let chunk_y = Math.floor(selection.y / (CHUNK_HEIGHT*32));
+    //     chunk_y < Math.floor((selection.y + selection.height) / (CHUNK_HEIGHT*32))+1;
+    //     chunk_y += 1
+    //   ) {
+    //     for (
+    //       let chunk_x = Math.floor(selection.y / (CHUNK_HEIGHT*32));
+    //       chunk_x < Math.floor((selection.x + selection.width) / (CHUNK_WIDTH*32))+1;
+    //       chunk_x += 1
+    //     ) {
+    //       // in the future make it into chunks
+
+    //     }
+    // }
+    const entitiesSelected: Set<number> = new Set();
+    const s = {
+      x: selection.x,
+      y: selection.y,
+      w: selection.width,
+      h: selection.height,
+    };
+    for (const entity of this.clientEntitiesMap.entities.values()) {
+      if (
+        entity.kind == "eliptae" &&
+        entity.ownerID == this.playersData[this.server.userID].ownerID &&
+        isColliding(s, { x: entity.x, y: entity.y, w: entity.w, h: entity.h })
+      ) {
+        entitiesSelected.add(entity.id);
+      }
+    }
+
+    this.updateSelectedEntitiesOverlay(entitiesSelected);
+  }
+
+  updateSelectedEntitiesOverlay(entitiesSelected: Set<number>) {
+    if (!this.scene) return;
+    for (const entitySelected of entitiesSelected) {
+      if (!this.entitiesSelected.has(entitySelected)) {
+        this.clientEntitiesMap.addComponent(
+          entitySelected,
+          "EntitySelectedOverlay",
+          entitiesComponentRegistry.EntitySelectedOverlay,
+          this.scene,
+        );
+      }
+    }
+    for (const entitySelected of this.entitiesSelected) {
+      if (!entitiesSelected.has(entitySelected)) {
+        this.clientEntitiesMap.removeComponent(
+          entitySelected,
+          "EntitySelectedOverlay",
+        );
+      }
+    }
+    this.entitiesSelected.clear();
+    for (const entitySelected of entitiesSelected) {
+      this.entitiesSelected.add(entitySelected);
+    }
+    console.log(this.entitiesSelected);
   }
 
   mineSelection(selection: Geom.Rectangle) {
@@ -188,7 +360,7 @@ export default class gameManager {
         this.clientBuildingsMap.addComponent(
           buildingID,
           "MiningOverlay",
-          componentRegistry["MiningOverlay"],
+          buildingsComponentRegistry["MiningOverlay"],
           this.scene,
         );
       }
@@ -242,7 +414,7 @@ export default class gameManager {
       this.clientBuildingsMap.addComponent(
         bid,
         "MiningOverlay",
-        componentRegistry["MiningOverlay"],
+        buildingsComponentRegistry["MiningOverlay"],
         this.scene,
       );
     }
@@ -250,7 +422,7 @@ export default class gameManager {
       this.clientBuildingsMap.addComponent(
         bid,
         "MiningOverlay",
-        componentRegistry["MiningOverlay"],
+        buildingsComponentRegistry["MiningOverlay"],
         this.scene,
       );
     }
@@ -316,6 +488,7 @@ export default class gameManager {
       // game state
       if (action.gs) {
         this.gameStarted = action.gs.gs;
+        this.playersData = action.gs.ps;
         if (!action.gs.gs && !action.gs.ge)
           loadAndOpen(action.gs, this.server.userID ?? "");
         else closePopup();
@@ -396,7 +569,7 @@ export default class gameManager {
           /// @ts-ignore
           b.id = buildingId;
           // @ts-ignore
-          issueSnapshotUpdate(clientB, b);
+          issueBuildingsSnapshotUpdate(clientB, b);
         } else {
           console.log("Creating a building", buildingId);
           // create the building
@@ -431,10 +604,11 @@ export default class gameManager {
           /// @ts-ignore
           e.id = entityId;
           // @ts-ignore
-          issueSnapshotUpdate(clientE, e);
+          issueEntitiesSnapshotUpdate(clientE, e);
         } else {
           console.log("Creating a building", entityId);
           // create the building
+          console.log({ ...e, id: parseInt(entityId) });
           this.clientEntitiesMap.addEntity(
             createClientEntity(
               // @ts-ignore
