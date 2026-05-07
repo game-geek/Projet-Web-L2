@@ -28,6 +28,7 @@ import * as z from "zod";
 import { ServerStreamtype } from "../../game-client/src/serverCommunication";
 import { GLOBAL_INDEX, incrementGlobalIndex } from "./loadMap";
 import { EntityKinds } from "./entities/globals";
+import { SpawnPoint } from ".";
 
 type ViewAreaType = { x: number; y: number; width: number; height: number };
 
@@ -85,6 +86,7 @@ export default class Player {
   public entitiesSnapshotBuilder: entitiesSnapshotBuilder | null = null;
   private clientTick = 0;
 
+  public winner: number | null = null;
   private serverStream: ServerStreamtype | null = null;
 
   private buildingToMine: Set<number> = new Set();
@@ -98,6 +100,7 @@ export default class Player {
   private bd = -1;
   private ed = -1;
   public firstConnection = false;
+  public dead = false;
 
   constructor(
     public ViewArea: ViewAreaType,
@@ -105,8 +108,19 @@ export default class Player {
     public entitiesMap: MapEntities,
     public color: string,
     public readonly userID: number,
+    public spawnPoint: SpawnPoint,
   ) {
     this.updateChunkView();
+    this.buildingsMap.createAndAddBuilding(
+      "core",
+      "core",
+      spawnPoint.x,
+      spawnPoint.y,
+      GLOBAL_INDEX,
+      userID,
+    );
+    this.buildings.add(GLOBAL_INDEX);
+    incrementGlobalIndex();
   }
 
   async setSession(session: Session) {
@@ -147,10 +161,95 @@ export default class Player {
           // search for entities in its chunks as its range is smaller than the chunksize
           this.buildingsMap.chunkPositioningPerBuilding[b.id].forEach(
             ([y, x]) => {
+              if (found) return;
+              // check for turrets
+              for (
+                let _y = y * CHUNK_HEIGHT;
+                _y <
+                Math.min((y + 1) * CHUNK_HEIGHT, this.buildingsMap.mapHeight);
+                _y++
+              ) {
+                if (found) break;
+                for (
+                  let _x = x * CHUNK_WIDTH;
+                  _x <
+                  Math.min((x + 1) * CHUNK_WIDTH, this.buildingsMap.mapWidth);
+                  _x++
+                ) {
+                  if (found) break;
+                  const randomBuilding = this.buildingsMap.buildings[_y][_x];
+                  if (!randomBuilding) continue;
+                  if (this.buildings.has(randomBuilding.id)) continue;
+                  else if (randomBuilding.kind == "core") {
+                    // check if in range
+                    if (
+                      randomBuilding.x * 32 <
+                        // @ts-ignore
+                        b.x * 32 + b.w * 32 + b.customState.area &&
+                      randomBuilding.x * 32 + randomBuilding.w * 32 >
+                        // @ts-ignore
+                        b.x * 32 - b.w * 32 - b.customState.area &&
+                      randomBuilding.y * 32 + randomBuilding.h * 32 >
+                        // @ts-ignore
+                        b.y * 32 - b.h * 32 - b.customState.area &&
+                      randomBuilding.y * 32 <
+                        // @ts-ignore
+                        b.y * 32 + b.h * 32 + +b.customState.area
+                    ) {
+                      // in range
+                      // fire bullet
+                      const trajectory = getBulletTrajectory(
+                        {
+                          x: b.x * 32,
+                          y: b.y * 32,
+                          w: b.w * 32,
+                          h: b.h * 32,
+                        },
+                        {
+                          x: randomBuilding.x * 32,
+                          y: randomBuilding.y * 32,
+                          w: randomBuilding.w * 32,
+                          h: randomBuilding.h * 32,
+                        },
+                        {
+                          w: 10,
+                          h: 10,
+                        },
+                      );
+                      this.entitiesMap.createAndAddEntity(
+                        "bullet",
+                        trajectory.spawn.x,
+                        trajectory.spawn.y,
+                        GLOBAL_INDEX,
+                        // @ts-ignore
+                        this.userID,
+                      );
+                      this.entities.add(GLOBAL_INDEX);
+                      const bullet =
+                        this.entitiesMap.entities.get(GLOBAL_INDEX);
+                      if (bullet) {
+                        bullet.customState.target = {
+                          x: trajectory.target.x,
+                          y: trajectory.target.y,
+                        };
+                        bullet.markDirty("customState", bullet.customState);
+                      }
+                      incrementGlobalIndex();
+
+                      b.customState.isShooting = 5;
+                      b.markDirty("customState", b.customState);
+                      found = true;
+                      break;
+                    }
+                  }
+                }
+              }
+
               for (const randomEntity of this.entitiesMap.entityChunks[y][x]) {
                 // @ts-ignore
                 if (this.entities.has(randomEntity.id)) continue;
                 else {
+                  console.log("userID", this.userID, " is updating ", b.kind);
                   // check if in range
                   if (
                     (randomEntity.kind == "miner" ||
@@ -464,7 +563,6 @@ export default class Player {
               e.customState.path = null;
               this.updateClientMinerEntities();
             }
-            console.log("b.hp", b.hp);
           } else {
             // building does not exist anymore
             e.customState.mining = false;
@@ -472,7 +570,6 @@ export default class Player {
             e.customState.path = null;
             this.updateClientMinerEntities();
           }
-          e.markDirty("customState", e.customState);
         }
       } else if (e.kind == "eliptae") {
         if (
@@ -501,15 +598,6 @@ export default class Player {
               { x, y },
             );
             if (path) {
-              console.log(
-                "update path",
-                "target",
-                e.customState.target,
-                "position",
-                { x: Math.floor(e.x / 32), y: Math.floor(e.y / 32) },
-                "path",
-                path,
-              );
               e.customState.path = path;
               e.markDirty("customState", e.customState);
             }
@@ -518,6 +606,89 @@ export default class Player {
         let found = false;
         //@ts-ignore
         if (!e.customState.isShooting > 0) {
+          this.entitiesMap.chunkPositioningPerEntity[e.id].forEach(([y, x]) => {
+            // check for turrets
+            if (found) return;
+            for (
+              let _y = y * CHUNK_HEIGHT;
+              _y <
+              Math.min((y + 1) * CHUNK_HEIGHT, this.buildingsMap.mapHeight);
+              _y++
+            ) {
+              if (found) break;
+              for (
+                let _x = x * CHUNK_WIDTH;
+                _x <
+                Math.min((x + 1) * CHUNK_WIDTH, this.buildingsMap.mapWidth);
+                _x++
+              ) {
+                if (found) break;
+                const randomBuilding = this.buildingsMap.buildings[_y][_x];
+                if (!randomBuilding) continue;
+                if (this.buildings.has(randomBuilding.id)) continue;
+                else if (randomBuilding.kind == "core") {
+                  // check if in range
+                  if (
+                    // @ts-ignore
+                    randomBuilding.x * 32 < e.x + e.w + e.customState.area &&
+                    randomBuilding.x * 32 + randomBuilding.w * 32 >
+                      // @ts-ignore
+                      e.x - e.w - e.customState.area &&
+                    randomBuilding.y * 32 + randomBuilding.h * 32 >
+                      // @ts-ignore
+                      e.y - e.h - e.customState.area &&
+                    // @ts-ignore
+                    randomBuilding.y * 32 < e.y + e.h + +e.customState.area
+                  ) {
+                    // in range
+                    // fire bullet
+                    const trajectory = getBulletTrajectory(
+                      {
+                        x: e.x,
+                        y: e.y,
+                        w: e.w,
+                        h: e.h,
+                      },
+                      {
+                        x: randomBuilding.x * 32,
+                        y: randomBuilding.y * 32,
+                        w: randomBuilding.w * 32,
+                        h: randomBuilding.h * 32,
+                      },
+                      {
+                        w: 10,
+                        h: 10,
+                      },
+                    );
+                    this.entitiesMap.createAndAddEntity(
+                      "bullet",
+                      trajectory.spawn.x,
+                      trajectory.spawn.y,
+                      GLOBAL_INDEX,
+                      //@ts-ignore
+                      this.userID,
+                    );
+                    this.entities.add(GLOBAL_INDEX);
+                    const bullet = this.entitiesMap.entities.get(GLOBAL_INDEX);
+                    if (bullet) {
+                      bullet.customState.target = {
+                        x: trajectory.target.x,
+                        y: trajectory.target.y,
+                      };
+                      bullet.markDirty("customState", bullet.customState);
+                    }
+                    incrementGlobalIndex();
+
+                    e.customState.isShooting = 10;
+                    e.markDirty("customState", e.customState);
+                    found = true;
+                    break;
+                  }
+                }
+              }
+            }
+          });
+
           this.entitiesMap.chunkPositioningPerEntity[e.id].forEach(([y, x]) => {
             // check for turrets
             if (found) return;
@@ -795,13 +966,11 @@ export default class Player {
                     },
                   )
                 ) {
-                  console.log("collision");
                   // in enemy hitbox
                   // destroy bullet
                   this.entitiesMap.removeEntity(e.id);
 
                   // apply some damage to entity
-                  console.log("HIT", randomEntity.hp);
                   // @ts-ignore
                   randomEntity.hp -= e.customState.damage;
                   randomEntity.markDirty("hp", randomEntity.hp);
@@ -819,36 +988,51 @@ export default class Player {
           if (found) continue;
 
           const buildings: Set<AnyServerBuilding | null> = new Set();
-          buildings.add(
-            this.buildingsMap.buildings[Math.floor(e.y / 32)][
-              Math.floor(e.x / 32)
-            ],
-          );
 
-          buildings.add(
-            this.buildingsMap.buildings[Math.ceil(e.y / 32)][
-              Math.floor(e.x / 32)
-            ],
-          );
-
-          buildings.add(
-            this.buildingsMap.buildings[Math.floor(e.y / 32)][
-              Math.ceil(e.x / 32)
-            ],
-          );
-
-          buildings.add(
-            this.buildingsMap.buildings[Math.ceil(e.y / 32)][
-              Math.ceil(e.x / 32)
-            ],
-          );
+          if (
+            Math.floor(e.y / 32) < this.buildingsMap.mapHeight &&
+            Math.floor(e.x / 32) < this.buildingsMap.mapWidth
+          )
+            buildings.add(
+              this.buildingsMap.buildings[Math.floor(e.y / 32)][
+                Math.floor(e.x / 32)
+              ],
+            );
+          if (
+            Math.ceil(e.y / 32) < this.buildingsMap.mapHeight &&
+            Math.floor(e.x / 32) < this.buildingsMap.mapWidth
+          )
+            buildings.add(
+              this.buildingsMap.buildings[Math.ceil(e.y / 32)][
+                Math.floor(e.x / 32)
+              ],
+            );
+          if (
+            Math.floor(e.y / 32) < this.buildingsMap.mapHeight &&
+            Math.ceil(e.x / 32) < this.buildingsMap.mapWidth
+          )
+            buildings.add(
+              this.buildingsMap.buildings[Math.floor(e.y / 32)][
+                Math.ceil(e.x / 32)
+              ],
+            );
+          if (
+            Math.ceil(e.y / 32) < this.buildingsMap.mapHeight &&
+            Math.ceil(e.x / 32) < this.buildingsMap.mapWidth
+          )
+            buildings.add(
+              this.buildingsMap.buildings[Math.ceil(e.y / 32)][
+                Math.ceil(e.x / 32)
+              ],
+            );
 
           for (const randomBuilding of buildings) {
             if (found) break;
             if (!randomBuilding) continue;
             if (this.buildings.has(randomBuilding.id)) continue;
             else if (
-              randomBuilding.kind == "turret" &&
+              (randomBuilding.kind == "turret" ||
+                randomBuilding.kind == "core") &&
               !this.buildings.has(randomBuilding.id)
             ) {
               // check if in range
@@ -873,7 +1057,6 @@ export default class Player {
                 this.entitiesMap.removeEntity(e.id);
 
                 // apply some damage to entity
-                console.log("HIT turret", randomBuilding.hp);
                 // @ts-ignore
                 randomBuilding.hp -= e.customState.damage;
                 randomBuilding.markDirty("hp", randomBuilding.hp);
@@ -913,7 +1096,6 @@ export default class Player {
                 this.entitiesMap.removeEntity(e.id);
 
                 // apply some damage to entity
-                console.log("HIT wall", randomBuilding.hp);
                 // @ts-ignore
                 randomBuilding.hp -= e.customState.damage;
                 randomBuilding.markDirty("hp", randomBuilding.hp);
@@ -949,7 +1131,6 @@ export default class Player {
         },
       );
       if (path) {
-        console.log("FOUND path!");
         path.pop();
         return {
           path,
@@ -960,7 +1141,6 @@ export default class Player {
         };
       }
     }
-    console.log("did not find path");
     return null;
   }
 
@@ -1096,7 +1276,6 @@ export default class Player {
 
     // update miner entities
     this.updateClientMinerEntities();
-    console.log("Adding a the full buildings to mine list to the stream");
   }
 
   createActionsSnapshot(tick: number) {
@@ -1112,20 +1291,26 @@ export default class Player {
   }
 
   processStreams(tick: number) {
+    if (this.dead) return;
     if (!this.userID) return;
     if (!this.session) return;
     if (this.session.incomingStreams.size == 0) return;
     for (const stream of this.session.incomingStreams) {
       const parsedStream = IncomingStreamSchema.parse(stream);
-      console.log("processing new client stream");
       if (parsedStream.a && parsedStream.a.bM) {
         // buildings to mine
         this.addBuildingsToMine(parsedStream.a.bM, tick, parsedStream.t);
       }
       if (parsedStream.a && parsedStream.a.spE) {
         for (const spawnAction of parsedStream.a.spE) {
+          if (
+            spawnAction.x / 32 > this.spawnPoint.x + 30 ||
+            spawnAction.x / 32 < this.spawnPoint.x - 30 ||
+            spawnAction.y / 32 < this.spawnPoint.y - 30 ||
+            spawnAction.y / 32 > this.spawnPoint.y + 30
+          )
+            continue;
           if (spawnAction.n == "miner" && this.currency >= 50) {
-            console.log("ADDING MINER ENTITY");
             this.entitiesMap.createAndAddEntity(
               spawnAction.n,
               Math.floor(spawnAction.x),
@@ -1140,7 +1325,6 @@ export default class Player {
             if (!this.serverStream.a) this.serverStream.a = {};
             this.serverStream.a.c = this.currency;
           } else if (spawnAction.n == "eliptae" && this.currency >= 100) {
-            console.log("ADDING ELIPTAE ENTITY");
             this.entitiesMap.createAndAddEntity(
               spawnAction.n,
               Math.floor(spawnAction.x),
@@ -1161,8 +1345,14 @@ export default class Player {
 
       if (parsedStream.a && parsedStream.a.spB) {
         for (const spawnAction of parsedStream.a.spB) {
+          if (
+            spawnAction.x / 32 > this.spawnPoint.x + 30 ||
+            spawnAction.x / 32 < this.spawnPoint.x - 30 ||
+            spawnAction.y / 32 < this.spawnPoint.y - 30 ||
+            spawnAction.y / 32 > this.spawnPoint.y + 30
+          )
+            continue;
           if (spawnAction.n == "turret" && this.currency >= 200) {
-            console.log("ADDING TURRET BUILDING");
             //@ts-ignore
             if (!BuildingVariantsMap[spawnAction.n].includes(spawnAction.v))
               continue;
@@ -1206,13 +1396,13 @@ export default class Player {
               spawnAction.y > this.buildingsMap.mapHeight * 32
             )
               continue;
+
             if (
               this.buildingsMap.buildings[Math.floor(spawnAction.y / 32)][
                 Math.floor(spawnAction.x / 32)
               ]
             )
               continue;
-            console.log("ADDING WALL BUILDING");
             this.buildingsMap.createAndAddBuilding(
               spawnAction.n,
               //@ts-ignore
@@ -1265,15 +1455,6 @@ export default class Player {
             { x: Math.floor(target.x / 32), y: Math.floor(target.y / 32) },
           );
           if (path) {
-            console.log(
-              "new path",
-              "target",
-              e.customState.target,
-              "position",
-              { x: Math.floor(e.x / 32), y: Math.floor(e.y / 32) },
-              "path",
-              path,
-            );
             e.customState.path = path;
             e.markDirty("customState", e.customState);
           }
@@ -1284,16 +1465,14 @@ export default class Player {
   }
 
   processDatagrams() {
+    if (this.dead) return;
     if (!this.session) return;
     if (this.session.incomingDatagrams.size == 0) return;
     const parsedDatagrams = [];
     for (const datagram of this.session.incomingDatagrams) {
-      console.log("processing new client datagram");
       try {
         parsedDatagrams.push(IncomingDatagramSchema.parse(datagram));
-      } catch {
-        console.log("Found an invalid datagram payload schema, dropping it");
-      }
+      } catch {}
       this.session.incomingDatagrams.delete(datagram);
     }
 
@@ -1307,8 +1486,7 @@ export default class Player {
   private applyDatagram(datagram: ClientDatagramtype) {
     if (!this.buildingsDeltaBuilder || !this.entitiesDeltaBuilder) return;
     if (datagram.t < this.clientTick)
-      return console.log("dropped old datagram");
-    this.buildingsDeltaBuilder.ack(datagram.ack);
+      this.buildingsDeltaBuilder.ack(datagram.ack);
     this.entitiesDeltaBuilder.ack(datagram.ack);
   }
 
@@ -1322,7 +1500,6 @@ export default class Player {
     )
       return;
 
-    console.log("Creating buildings snapshot");
     if (this.bs == tick) return;
     this.buildingsSnapshotBuilder.createSnapshot();
     this.bs = tick;
@@ -1336,7 +1513,6 @@ export default class Player {
       !this.session
     )
       return;
-    console.log("Creating entities snapshot");
     if (this.es == tick) return;
     this.entitiesSnapshotBuilder.createSnapshot();
     this.es = tick;
@@ -1352,6 +1528,7 @@ export default class Player {
       return;
     this.createBuildingSnapshot(tick);
     this.createEntitySnapshot(tick);
+    this.createActionsSnapshot(tick);
   }
 
   sendDelta(tick: number) {
@@ -1395,7 +1572,6 @@ export default class Player {
     )
       return;
 
-    console.log("Sending the built stream");
     if (!this.serverStream) this.serverStream = { t: tick };
     if (this.bs == tick) {
       this.serverStream.bs = this.buildingsSnapshotBuilder.snapshot;
@@ -1425,12 +1601,7 @@ export default class Player {
         }
       }
     }
-    console.log(
-      "New buildings size",
-      this.buildingsMap.fullDirtyBuildings.size,
-    );
     if (this.buildingsMap.fullDirtyBuildings.size > 0) {
-      console.log("Pushing new buildings to client");
       if (!this.serverStream.a) this.serverStream.a = {};
       if (!this.serverStream.a.nB) this.serverStream.a.nB = {};
       for (const building of this.buildingsMap.fullDirtyBuildings) {
@@ -1484,6 +1655,7 @@ export default class Player {
         this.serverStream.a.gs = {
           gs: gameStarted,
           ge: gameEnd,
+          w: this.winner ?? undefined,
           ps: {},
         };
       players.forEach((p) => {
@@ -1495,6 +1667,7 @@ export default class Player {
           ready: p.playerReady,
           color: p.color,
           ownerID: p.userID,
+          spawn: { x: p.spawnPoint.x, y: p.spawnPoint.y },
         };
       });
 
@@ -1506,16 +1679,13 @@ export default class Player {
     if (!this.session) return;
     let latestStream: null | ClientStreamtype = null;
     for (const stream of this.session.incomingStreams) {
-      console.log("new stream");
       const parsedStream = IncomingStreamSchema.parse(stream);
       if (!latestStream) latestStream = parsedStream;
       else if (parsedStream.t > latestStream.t) latestStream = parsedStream;
       this.session.incomingStreams.delete(stream);
     }
-    console.log(latestStream);
     if (latestStream && latestStream.a) {
       this.playerReady = latestStream.a.r ?? this.playerReady;
-      console.log("updating player status");
     }
     if (this.serverStream) {
       this.session.sendStreamJSON(this.serverStream);
@@ -1523,12 +1693,8 @@ export default class Player {
     }
   }
   update(tick: number) {
-    console.log("updating player");
     if (this.firstConnection) {
-      console.log("sending full snapshot");
-      this.createBuildingSnapshot(tick);
-      this.createEntitySnapshot(tick);
-      this.createActionsSnapshot(tick);
+      this.createSnapshot(tick);
       this.firstConnection = false;
     }
     this.updateClientEntities(tick);
@@ -1545,7 +1711,6 @@ function findPath(
   start: Point,
   end: Point,
 ): Point[] | null {
-  console.log("start", start, "end", end);
   const getIndex = (x: number, y: number) => y * width + x;
   const openSet: { f: number; x: number; y: number }[] = [];
   const parents = new Map<number, number>();
@@ -1577,9 +1742,6 @@ function findPath(
         if (dx === 0 && dy === 0) continue;
         const nx = current.x + dx,
           ny = current.y + dy;
-        // console.log(
-        //   `Checking (${nx}, ${ny}, ${end.x}, ${end.y}): Occupied? ${grid[ny][nx] && !(end.x == nx && end.y == ny)}`,
-        // );
         if (
           nx < 0 ||
           nx >= width ||
@@ -1605,7 +1767,7 @@ function findPath(
   }
   return null;
 }
-function getRandomInt(min: number, max: number): number {
+export function getRandomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 

@@ -1,5 +1,6 @@
 export const gameColors: string[] = [
   "#FF0000", // bright red
+  "#FF0000", // bright red
   "#00FF00", // lime green
   "#0000FF", // royal blue
   "#FFFF00", // yellow

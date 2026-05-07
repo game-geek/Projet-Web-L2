@@ -7,8 +7,6 @@ export default class MiningOverlay implements Component {
     private building: ClientBuilding<BuildingKind>,
     private scene: Phaser.Scene,
   ) {
-    console.log("fdsfsdfsdlfjldsfjdlk");
-    console.log("sprite");
     this.sprite = scene.add
       .sprite(building.x * 32, building.y * 32, "pickaxe")
       .setOrigin(0, 0)

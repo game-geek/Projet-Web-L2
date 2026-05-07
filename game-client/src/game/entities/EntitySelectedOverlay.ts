@@ -16,7 +16,6 @@ export default class EntitySelectedOverlay implements Component {
   }
 
   onDelta(delta: Partial<Record<DeltaField, any>>) {
-    console.log("delta", delta);
     if (delta.x !== undefined || delta.y !== undefined) {
       this.updateOverlay();
     }
@@ -27,7 +26,6 @@ export default class EntitySelectedOverlay implements Component {
 
   private updateOverlay() {
     if (!this.graphics || !this.entity.x || !this.entity.y) return;
-    console.log("ENTITY PATH UPDATE", this.entity.customState);
 
     this.graphics.clear();
 

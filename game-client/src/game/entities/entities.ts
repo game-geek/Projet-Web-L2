@@ -48,9 +48,7 @@ export class ClientEntity<K extends EntityKind> {
     public destroyed: boolean,
     public customState: Record<number, unknown>,
     public ownerID: number,
-  ) {
-    console.log("entity spawn");
-  }
+  ) {}
 
   update(dt: number) {
     for (const comp of this.components.values()) {
@@ -100,12 +98,6 @@ export class MapEntities {
       return console.log("Placement out of map");
 
     this.entities.set(entity.id, entity);
-    console.log(
-      "setting",
-      entity.id,
-      "does it have it ?",
-      this.entities.has(entity.id),
-    );
   }
   updateEntities(dt: number) {
     for (const entity of this.entities.values()) {
@@ -143,7 +135,6 @@ export function issueEntityDeltaUpdate(
     // @ts-ignore
     entity[field] = snapshot[field];
   }
-  console.log("dela", snapshot.x, entity.x);
   entity.components.forEach((comp) => comp.onDelta(snapshot));
 }
 export function issueEntitiesSnapshotUpdate(

@@ -11,12 +11,11 @@ export default class RenderStatic implements Component {
     private building: ClientBuilding<BuildingKind>,
     private scene: Phaser.Scene,
   ) {
-    console.log("sprite");
     this.sprite = scene.add
       .sprite(building.x * 32, building.y * 32, building.variant)
       .setOrigin(0, 0);
 
-    if (building.kind == "turret") {
+    if (building.kind == "turret" || building.kind == "core") {
       const dotSize = 6;
       const dotX = this.sprite.x + this.sprite.displayWidth - dotSize * 0.5;
       const dotY = this.sprite.y + this.sprite.displayHeight - dotSize * 0.5;

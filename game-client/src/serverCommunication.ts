@@ -138,6 +138,7 @@ export const IncomingStreamSchema = z.object({
         .object({
           gs: z.boolean(),
           ge: z.boolean(),
+          w: z.number().optional(),
           ps: z.record(
             z.string(),
             z.object({
@@ -146,6 +147,7 @@ export const IncomingStreamSchema = z.object({
               ready: z.boolean(),
               color: z.string(),
               ownerID: z.number(),
+              spawn: z.object({ x: z.number(), y: z.number() }),
             }),
           ),
         })

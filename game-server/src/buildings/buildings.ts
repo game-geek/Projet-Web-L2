@@ -193,7 +193,11 @@ export class MapBuildings {
       this.removedBuildings.add(buildingID);
       const b = this.allBuildings.get(buildingID);
       if (b) {
-        this.buildings[b.y][b.x] = null;
+        for (let y = b.y; y < b.y + b.h; y++) {
+          for (let x = b.x; x < b.x + b.w; x++) {
+            this.buildings[y][x] = null;
+          }
+        }
       }
       this.allBuildings.delete(buildingID);
     }

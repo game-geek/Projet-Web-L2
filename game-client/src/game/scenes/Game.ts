@@ -12,8 +12,6 @@ export class Game extends Scene {
   background: Phaser.GameObjects.Image;
   msg_text: Phaser.GameObjects.Text;
 
-  currencyText: Phaser.GameObjects.Text | null = null;
-
   gameManager: gameManager | null = null;
   private wasd: {
     Q: Phaser.Input.Keyboard.Key;
@@ -66,7 +64,13 @@ export class Game extends Scene {
   init() {
     this.gameManager = gameManagerInstance;
     this.gameManager.init(this);
-    console.log("game initialized");
+    this.scene.launch("CurrencyScene");
+  }
+
+  zoomTo(x: number, y: number): void {
+    const camera = this.cameras.main;
+    camera.setZoom(1); // Normal zoom level
+    camera.centerOn(x, y); // Screen middle at world (x, y)
   }
 
   create() {
@@ -82,7 +86,6 @@ export class Game extends Scene {
 
     esc.on("down", () => {
       if (!this.gameManager) return;
-      console.log("Escape pressed");
       if (!this.overlayAction) {
         this.gameManager.clearRobotSelection();
       }
@@ -175,7 +178,6 @@ export class Game extends Scene {
       if (!pointer.leftButtonReleased()) return;
 
       if (!this.overlayAction) {
-        console.log("got selection for robots");
         if (!this.selectionStart) return;
         const endWorld = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
@@ -210,7 +212,6 @@ export class Game extends Scene {
           endWorld.x,
           endWorld.y,
         );
-        console.log("overlay action", this.overlayAction, selectionRect);
         this.gameManager.mineSelection(selectionRect);
 
         // Now check your game objects
@@ -239,22 +240,6 @@ export class Game extends Scene {
         this.gameManager.spawnTurret(currentPoint.x, currentPoint.y);
       }
     });
-
-    // currency
-    this.currencyText = this.add
-      .text(
-        this.cameras.main.width - 20, // Right-aligned, 20px padding
-        20, // Top padding
-        "crystite: 0",
-        {
-          fontSize: "24px",
-          fontFamily: "custom",
-          color: "#ffffff",
-          align: "right",
-        },
-      )
-      .setOrigin(1, 0)
-      .setScrollFactor(0);
 
     // for panning
 
@@ -366,8 +351,6 @@ export class Game extends Scene {
   update(time: number, delta: number): void {
     if (!this.gameManager) return;
     this.gameManager.update(delta);
-    if (this.currencyText)
-      this.currencyText.setText(`crystite: ${this.gameManager?.currency || 0}`);
 
     if (this.wasd) {
       if (this.wasd.Q.isDown) this.camera.scrollX -= this.cameraSpeed;

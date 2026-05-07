@@ -15,7 +15,6 @@ export default class buildingsSnapshotBuilder {
   ) {}
 
   createSnapshot() {
-    console.log("eheheih<fkjsl");
     this.snapshot = {};
     for (
       let y = this.player.ViewArea.y;

@@ -5,6 +5,7 @@ import {
   BuildingSnapshot,
   ServerBuilding,
 } from "./buildings";
+import Core from "./Core";
 import NaturalWall from "./NaturalWall";
 import Turret from "./Turret";
 import Wall from "./Wall";
@@ -14,16 +15,15 @@ export const BuildingVariantsMap = {
   natural_wall: ["1", "2", "3", "4", "5", "6", "7", "8"],
   turret: ["turret"],
   wall: ["wall"],
+  core: ["core"],
 } as const; // "as const" is needed for the types match PERFECTLY their values, for ex "top" is "top" and not string
 
 // the default data related to those buildings
 export const BuildingDefs = {
   natural_wall: {
-    shared: { maxHp: 300, destructible: true, w: 1, h: 1 },
+    shared: { maxHp: 500, destructible: true, w: 1, h: 1 },
     server: {
-      initState: () => ({
-        toMine: false,
-      }),
+      initState: () => ({}),
     },
     client: {
       textures: {
@@ -40,11 +40,9 @@ export const BuildingDefs = {
     },
   },
   wall: {
-    shared: { maxHp: 10000, destructible: true, w: 1, h: 1 },
+    shared: { maxHp: 800, destructible: true, w: 1, h: 1 },
     server: {
-      initState: () => ({
-        toMine: false,
-      }),
+      initState: () => ({}),
     },
     client: {
       textures: {
@@ -53,8 +51,20 @@ export const BuildingDefs = {
       components: ["RenderStatic"] as const,
     },
   },
+  core: {
+    shared: { maxHp: 5000, destructible: true, w: 3, h: 3 },
+    server: {
+      initState: () => ({}),
+    },
+    client: {
+      textures: {
+        core: "assets/core_96.png",
+      },
+      components: ["RenderStatic"] as const,
+    },
+  },
   turret: {
-    shared: { maxHp: 300, destructible: true, w: 1, h: 1 },
+    shared: { maxHp: 200, destructible: true, w: 1, h: 1 },
     server: {
       initState: () => ({
         area: 200,
@@ -98,4 +108,5 @@ export const BuildingSystems: BuildingSystemMap = {
   natural_wall: NaturalWall,
   turret: Turret,
   wall: Wall,
+  core: Core,
 } as const;

@@ -55,8 +55,6 @@ function renderPlayers(state: LobbyState, selfId: string) {
     if (!player) return;
     if (id === selfId) return;
 
-    console.log(player);
-
     const card = document.createElement("div");
     card.className = "player-card";
     card.innerHTML = `
@@ -92,8 +90,6 @@ export function loadAndOpen(state: LobbyState, userID: string) {
 
   currentState = state;
   currentSelfId = Object.keys(state.ps).find((id) => id == userID) ?? null;
-
-  console.log("self", currentSelfId && state.ps[currentSelfId]);
 
   if (!currentSelfId) {
     popup.classList.remove("hidden");

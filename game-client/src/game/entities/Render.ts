@@ -14,7 +14,7 @@ export default class Render implements Component {
   private serverY: number;
 
   // 2. Interpolation factor (0.1 = smooth/slow, 0.5 = fast/snappy)
-  private lerpFactor: number = 0.2;
+  private lerpFactor: number = 0.05;
 
   constructor(
     private entity: ClientEntity<EntityKind>,

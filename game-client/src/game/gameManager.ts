@@ -11,6 +11,7 @@ import {
   buildingsComponentRegistry,
   createClientBuilding,
   issueBuildingDeltaUpdate,
+  issueBuildingsSnapshotUpdate,
   MapBuildings,
 } from "./buildings/buildings";
 import { ClientStreamtype } from "../../../game-server/src/Player";
@@ -63,7 +64,6 @@ export default class gameManager {
 
   init(scene: Phaser.Scene) {
     this.scene = scene;
-    console.log("gamemanager init");
   }
 
   setIsReady(ready: boolean) {
@@ -183,7 +183,6 @@ export default class gameManager {
       y > this.clientEntitiesMap.height * 32
     )
       return;
-    console.log("setting target");
     if (!this.clientStream) this.clientStream = { t: this.tick };
     if (!this.clientStream.a) this.clientStream.a = {};
     if (!this.clientStream.a.mE) this.clientStream.a.mE = {};
@@ -263,7 +262,6 @@ export default class gameManager {
     for (const entitySelected of entitiesSelected) {
       this.entitiesSelected.add(entitySelected);
     }
-    console.log(this.entitiesSelected);
   }
 
   mineSelection(selection: Geom.Rectangle) {
@@ -291,13 +289,11 @@ export default class gameManager {
             }
           }
           if (found) continue;
-          console.log(b.id, this.buildingsToMine, this.predictions);
           buildingsToMine.add(b.id);
         }
       }
     }
     if (buildingsToMine.size == 0) return;
-    console.log("adding buildings to mine to stream + created prediction");
     // create prediction
     this.predictions.buildingsToMine.set(this.tick, buildingsToMine);
     // send data to client
@@ -309,7 +305,6 @@ export default class gameManager {
   }
   update(dt: number) {
     this.tick++;
-    // console.log("gameManager tick", this.tick);
 
     // parse the latest datagrams and snapshots
     this.server.parseDatagrams();
@@ -403,12 +398,6 @@ export default class gameManager {
       }
     }
 
-    console.log(
-      "huge update",
-      buildingIdsToRemoveIfNotPresent,
-      newBuildingIdsForOverlay,
-      buildingsToMine,
-    );
     // apply changes
     for (const bid of newBuildingIdsForOverlay) {
       this.clientBuildingsMap.addComponent(
@@ -433,9 +422,7 @@ export default class gameManager {
   processStreamActions() {
     for (const action of this.server.latestActions) {
       if (!action) return;
-      console.log("processing stream action");
       if (action.bM) {
-        console.log("got a complete buildingsToMine action");
         for (const bM of action.bM) {
           const buildingsToMine = new Set(bM.bM);
           this.setRealMiningOverlayWithPredictions(bM.t, buildingsToMine);
@@ -447,7 +434,6 @@ export default class gameManager {
       }
       if (action.nB) {
         for (const newBuildingID in action.nB) {
-          console.log("Creating a building", newBuildingID);
           // @ts-ignore need to typesafe the parsing with BuildingSnapshot
           this.clientBuildingsMap.addBuilding(
             createClientBuilding(
@@ -460,8 +446,6 @@ export default class gameManager {
       }
       if (action.nE) {
         for (const newEntityID in action.nE) {
-          console.log("Creating an Entity", newEntityID);
-
           // @ts-ignore need to typesafe the parsing with BuildingSnapshot
           this.clientEntitiesMap.addEntity(
             createClientEntity(
@@ -487,8 +471,33 @@ export default class gameManager {
 
       // game state
       if (action.gs) {
+        if (
+          action.gs.gs &&
+          this.gameStarted == false &&
+          this.server.userID &&
+          this.scene
+        ) {
+          //@ts-ignore
+          this.scene.zoomTo(
+            action.gs.ps[this.server.userID].spawn.x * 32,
+            action.gs.ps[this.server.userID].spawn.y * 32,
+          );
+        }
         this.gameStarted = action.gs.gs;
         this.playersData = action.gs.ps;
+        if (action.gs.ge) {
+          const winner = action.gs.w;
+          if (typeof winner != "number") {
+            window.alert("Merci à tout le monde d'avoir sauvé l'espace");
+          } else {
+            let winnerName = "_unknow_user_name_";
+            for (const player of Object.values(action.gs.ps)) {
+              if (player.ownerID == winner) winnerName = player.username;
+            }
+            window.alert("Merci à " + winnerName + " d'avoir sauvé l'espace");
+          }
+          window.location.replace("/");
+        }
         if (!action.gs.gs && !action.gs.ge)
           loadAndOpen(action.gs, this.server.userID ?? "");
         else closePopup();
@@ -503,7 +512,6 @@ export default class gameManager {
 
   processDatagramDelta() {
     if (this.server.latestDatagram) {
-      console.log("Processing server delta");
       if (this.server.latestDatagram.bd) {
         for (const buildingID in this.server.latestDatagram.bd) {
           if (!this.clientBuildingsMap.buildings.has(parseInt(buildingID))) {
@@ -512,7 +520,6 @@ export default class gameManager {
               "got an update of an building we don't have, fatal error!",
             );
           } else {
-            console.log("updating building");
             issueBuildingDeltaUpdate(
               // @ts-ignore
               this.clientBuildingsMap.buildings.get(parseInt(buildingID)),
@@ -529,7 +536,6 @@ export default class gameManager {
               "got an update of an entity we don't have, fatal error!",
             );
           } else {
-            console.log("updating entity");
             issueEntityDeltaUpdate(
               // @ts-ignore
               this.clientEntitiesMap.entities.get(parseInt(entityID)),
@@ -539,7 +545,6 @@ export default class gameManager {
         }
       }
       // add ack tag to clientDatagram if datagram arrived
-      console.log("adding the delta ack to the stream");
       if (!this.clientDatagram)
         this.clientDatagram = {
           t: this.tick,
@@ -554,7 +559,6 @@ export default class gameManager {
       this.server.latestBuildingSnapshot &&
       this.server.latestBuildingSnapshot.bs
     ) {
-      console.log("Loading a full buildings server snapshot");
       for (const buildingId in this.server.latestBuildingSnapshot.bs) {
         const b = this.server.latestBuildingSnapshot.bs[buildingId];
         const clientB = this.clientBuildingsMap.buildings.get(
@@ -565,13 +569,11 @@ export default class gameManager {
           clientB
         ) {
           // update the building
-          console.log("Updating a building");
           /// @ts-ignore
           b.id = buildingId;
-          // @ts-ignore
+          //@ts-ignore
           issueBuildingsSnapshotUpdate(clientB, b);
         } else {
-          console.log("Creating a building", buildingId);
           // create the building
           this.clientBuildingsMap.addBuilding(
             createClientBuilding(
@@ -591,7 +593,6 @@ export default class gameManager {
       this.server.latestEntitySnapshot &&
       this.server.latestEntitySnapshot.es
     ) {
-      console.log("Loading a full entities server snapshot");
       for (const entityId in this.server.latestEntitySnapshot.es) {
         const e = this.server.latestEntitySnapshot.es[entityId];
         const clientE = this.clientEntitiesMap.entities.get(parseInt(entityId));
@@ -600,15 +601,12 @@ export default class gameManager {
           clientE
         ) {
           // update the building
-          console.log("Updating a building");
           /// @ts-ignore
           e.id = entityId;
           // @ts-ignore
           issueEntitiesSnapshotUpdate(clientE, e);
         } else {
-          console.log("Creating a building", entityId);
           // create the building
-          console.log({ ...e, id: parseInt(entityId) });
           this.clientEntitiesMap.addEntity(
             createClientEntity(
               // @ts-ignore

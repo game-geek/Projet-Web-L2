@@ -216,41 +216,49 @@ export class MapEntities {
   }
 
   updateEntityChunksBasedOnDirty() {
-    const entitiesToUpdate: Set<string> = new Set();
+    const entitiesToUpdate: Set<number> = new Set();
     for (const dirtyChunkY of this.allDirtyChunks[this.allDirtyChunksAt]) {
       for (const dirtyChunkX of dirtyChunkY) {
-        for (const dirtyEntityID in dirtyChunkX) {
+        for (const [id, dirtyEntity] of Object.entries(dirtyChunkX)) {
+          if (!dirtyEntity) continue;
           if (
-            "x" in dirtyChunkX[dirtyEntityID] ||
-            "y" in dirtyChunkX[dirtyEntityID] ||
-            "w" in dirtyChunkX[dirtyEntityID] ||
-            "h" in dirtyChunkX[dirtyEntityID]
+            "x" in dirtyEntity ||
+            "y" in dirtyEntity ||
+            "w" in dirtyEntity ||
+            "h" in dirtyEntity
           ) {
-            entitiesToUpdate.add(dirtyEntityID);
+            entitiesToUpdate.add(parseInt(id));
           }
         }
       }
     }
     for (const entityID of entitiesToUpdate) {
-      // @ts-ignore
+      //@ts-ignore
       this.updateEntityChunks(this.entities.get(entityID));
     }
   }
 
   updateEntityChunks(entity: AnyServerEntity) {
     if (!entity) return;
+    if (
+      entity.x > this.mapWidth * 32 ||
+      entity.x < 0 ||
+      entity.y < 0 ||
+      entity.y > this.mapHeight * 32
+    )
+      return;
     for (const [chunkY, chunkX] of this.chunkPositioningPerEntity[entity.id]) {
       this.entityChunks[chunkY][chunkX].delete(entity);
     }
     this.chunkPositioningPerEntity[entity.id] = [];
     for (
       let chunk_y = Math.floor(entity.y / (CHUNK_HEIGHT * 32));
-      chunk_y < Math.ceil((entity.y + entity.h) / (CHUNK_HEIGHT * 32));
+      chunk_y < Math.floor((entity.y + entity.h) / (CHUNK_HEIGHT * 32)) + 1;
       chunk_y += 1
     ) {
       for (
         let chunk_x = Math.floor(entity.x / (CHUNK_WIDTH * 32));
-        chunk_x < Math.ceil((entity.x + entity.w) / (CHUNK_WIDTH * 32));
+        chunk_x < Math.floor((entity.x + entity.w) / (CHUNK_WIDTH * 32)) + 1;
         chunk_x += 1
       ) {
         this.chunkPositioningPerEntity[entity.id].push([chunk_y, chunk_x]);

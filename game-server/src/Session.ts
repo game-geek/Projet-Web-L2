@@ -85,7 +85,6 @@ export default class Session {
       // if authentificated, works as normal
       if (session.userID) {
         session.incomingStreams.add(json);
-        console.log("new stream payload: ", json);
       } else session.auth(json);
     } catch (err) {
       console.log(
@@ -112,7 +111,6 @@ export default class Session {
       const json = JSON.parse(new TextDecoder().decode(datagram));
       if (this.userID) {
         this.incomingDatagrams.add(json);
-        console.log("new datagram payload: ");
       }
     } catch (err) {
       console.log("new datagram payload: Invalid datagram: must be JSON", err);
@@ -143,7 +141,6 @@ export default class Session {
     if (this.closed)
       return console.log("[session] can't send stream because it's closed");
 
-    console.log("sending stream to client");
     try {
       const encoder = new TextEncoder();
       const buffer = new Uint8Array(65536);
@@ -153,7 +150,6 @@ export default class Session {
       );
       const view = new DataView(buffer.buffer);
       view.setUint16(0, result.written, false);
-      console.log("sending stream of length", result.written);
       await this.stream.write(buffer.subarray(0, 2 + result.written));
     } catch (err) {
       console.log("Error while trying to send stream", err);
@@ -244,24 +240,10 @@ export class ReadStream {
               this.chunkAt += this.messageLength - this.writePos;
               this.writePos += this.messageLength - this.writePos;
             }
-
-            console.log(
-              "stream data " +
-                this.writePos +
-                "/" +
-                this.messageLength.toString(),
-            );
           }
 
           // Check if message is finished
           if (this.writePos > this.messageLength) {
-            console.log(
-              "Protocol not respected, message is too long, it does not correspond to the said length",
-              "writepos: ",
-              this.writePos,
-              "messsage length: ",
-              this.messageLength,
-            );
             break;
           }
           if (this.writePos == this.messageLength) {

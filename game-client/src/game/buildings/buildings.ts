@@ -83,7 +83,15 @@ export class MapBuildings {
 
   removeBuilding(buildingID: number) {
     const b = this.buildings.get(buildingID);
-    if (b) b.destroy();
+    if (b) {
+      for (let y = b.y; y < b.y + b.h; y++) {
+        for (let x = b.x; x < b.x + b.w; x++) {
+          this.buildingsMap[y][x] = null;
+        }
+      }
+
+      b.destroy();
+    }
     this.buildings.delete(buildingID);
   }
 
@@ -111,12 +119,6 @@ export class MapBuildings {
       }
     }
     this.buildings.set(building.id, building);
-    console.log(
-      "setting",
-      building.id,
-      "does it have it ?",
-      this.buildings.has(building.id),
-    );
   }
 
   _displayDebugMap() {

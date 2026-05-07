@@ -69,7 +69,6 @@ export default class WebTransportCommunication {
       if (done) break;
       try {
         const json = JSON.parse(new TextDecoder().decode(value));
-        console.log("Server datagram:", json);
         this.incomingDatagrams.add(json);
       } catch (err) {
         console.log("Datagram from server is not JSON");
@@ -100,7 +99,6 @@ export default class WebTransportCommunication {
     try {
       const json = JSON.parse(new TextDecoder().decode(data));
       this.incomingStreams.add(json);
-      console.log("new stream payload: ", json);
     } catch (err) {
       console.log(
         "new stream payload: Invalid stream: must be JSON bytes",

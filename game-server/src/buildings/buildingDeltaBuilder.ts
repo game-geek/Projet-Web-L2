@@ -14,11 +14,6 @@ export default class buildingsDeltaBuilder {
   tick(tickNumber: number, allDirtyChunksAt: number) {
     // check if we didn't go over the max ticks behind
     if (tickNumber - this.ackedTick > DIRTY_CHUNKS_TICKS) {
-      console.log(
-        "Buildings delta: passed the ",
-        DIRTY_CHUNKS_TICKS,
-        "max ticks behind, sending a full buildings snapshot",
-      );
       // send snapshot and reset ackedTick
       this.ack(tickNumber);
       return true;
@@ -43,7 +38,6 @@ export default class buildingsDeltaBuilder {
         this.addNewSnapshot(this.allDirtyChunks[i]);
         totalDirtyTicks++;
       }
-      console.log("start", start, "ticksbehind", ticksBehind);
       for (const dirtyChunks of this.allDirtyChunks.slice(
         allDirtyChunksAt - ticksBehind,
         allDirtyChunksAt + 1,
@@ -56,26 +50,9 @@ export default class buildingsDeltaBuilder {
       this.addNewSnapshot(this.allDirtyChunks[allDirtyChunksAt]);
       totalDirtyTicks++;
     }
-    console.log(
-      "snapshot",
-      tickNumber,
-      this.ackedTick,
-      totalDirtyTicks,
-      allDirtyChunksAt,
-    );
 
     if (totalDirtyTicks > 1) {
-      console.log(
-        "Buildings delta: rebuild occurred, with",
-        totalDirtyTicks,
-        "ticks of dirtyChunks accessed",
-      );
     }
-    console.log(
-      "Buildings delta:",
-      tickNumber - this.ackedTick - 1,
-      "ticks behind",
-    );
     return false;
   }
 

@@ -35,7 +35,6 @@ function attemptAutoConnect() {
 
 // get previously stored connection URL
 export function getGameData() {
-  console.log(localStorage.getItem("data"));
   if (localStorage.getItem("data")) {
     try {
       //@ts-ignore

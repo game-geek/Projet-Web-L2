@@ -15,11 +15,6 @@ export default class entitiesDeltaBuilder {
     // check if we didn't go over the max ticks behind
     let totalDirtyTicks = 0;
     if (tickNumber - this.ackedTick > DIRTY_CHUNKS_TICKS) {
-      console.log(
-        "Entities delta: passed the ",
-        DIRTY_CHUNKS_TICKS,
-        "max ticks behind, sending a full entities snapshot",
-      );
       // send snapshot and reset ackedTick
       this.ack(tickNumber);
       return true;
@@ -43,7 +38,6 @@ export default class entitiesDeltaBuilder {
         this.addNewSnapshot(this.allDirtyChunks[i]);
         totalDirtyTicks++;
       }
-      console.log("start", start, "ticksbehind", ticksBehind);
       for (const dirtyChunks of this.allDirtyChunks.slice(
         allDirtyChunksAt - ticksBehind,
         allDirtyChunksAt + 1,
@@ -57,19 +51,7 @@ export default class entitiesDeltaBuilder {
       totalDirtyTicks++;
     }
     if (totalDirtyTicks > 1) {
-      console.log(
-        "Entities delta: rebuild occurred, with",
-        totalDirtyTicks,
-        "ticks of dirtyChunks accessed",
-      );
     }
-    console.log(
-      "Entities delta:",
-      tickNumber - this.ackedTick - 1,
-      "ticks behind",
-      "added",
-      totalDirtyTicks,
-    );
     return false;
   }
 
