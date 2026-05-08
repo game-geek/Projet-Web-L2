@@ -20,3 +20,5 @@ const server = createServer({
     newPlayerSessions.add(new Session(session));
   },
 });
+
+console.log(`WebTransport endpoint: https://127.0.0.1:4433`);
