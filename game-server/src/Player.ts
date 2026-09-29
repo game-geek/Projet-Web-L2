@@ -15,7 +15,7 @@ import {
 } from "./buildings/globals";
 import Session from "./Session";
 import buildingsDeltaBuilder from "./buildings/buildingDeltaBuilder";
-import buildingsSnapshotBuilder from "./buildings/buildingsSnapshotBuilder";
+import buildingsSnapshotBuilder, { ServerStreamtype } from "./buildings/buildingsSnapshotBuilder";
 import entitiesDeltaBuilder from "./entities/entitiesDeltaBuilder";
 import entitiesSnapshotBuilder from "./entities/entitiesSnapshotBuilder";
 import {
@@ -25,7 +25,6 @@ import {
   MapEntities,
 } from "./entities/entities";
 import * as z from "zod";
-import { ServerStreamtype } from "../../game-client/src/serverCommunication";
 import { GLOBAL_INDEX, incrementGlobalIndex } from "./loadMap";
 import { EntityKinds } from "./entities/globals";
 import { SpawnPoint } from ".";

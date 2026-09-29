@@ -1,9 +1,13 @@
 {
   "name": "game-server",
   "version": "1.0.50",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/app.ts",
+    "build": "tsup src/app.ts --format esm --platform node --out-dir dist",
+    "start": "bun dist/app.js",
+    "startv2": "bun run src/app.ts" 
   },
   "dependencies": {
     "@webtransport-bun/webtransport": "^0.3.0",
@@ -11,7 +15,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2"
   },
   "module": "src/index.js"
 }

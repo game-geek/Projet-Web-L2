@@ -1,9 +1,8 @@
 import { ReadStream } from "../../game-server/src/Session";
-const URL = "https://127.0.0.1:4433/wt";
 
 // class that only handle webtransport packet communication
 export default class WebTransportCommunication {
-  private transport: null | WebTransport;
+  private transport: null | WebTransport = null;
   public gameServerURL: null | string = null;
   public ready = false;
   private datagramWriter: null | WritableStreamDefaultWriter<any> = null;

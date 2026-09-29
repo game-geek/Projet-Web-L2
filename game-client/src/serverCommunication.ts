@@ -1,10 +1,5 @@
 // higher level server communication for packet parsing, ticksIDs, deltas, snapshots, auth, ...
 
-import {
-  AnyBuildingSnapshot,
-  BuildingSnapshot,
-} from "../../game-server/src/buildings/buildings";
-import { BuildingVariantsMap } from "../../game-server/src/buildings/globals";
 import webTransportCommunication from "./WebTransportCommunication";
 import * as z from "zod";
 

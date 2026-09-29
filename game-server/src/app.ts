@@ -6,8 +6,8 @@ import deltaBuilder from "./buildings/buildingDeltaBuilder";
 import { players } from "./index";
 
 // Dev certs server cert and private key
-const certPem = fs.readFileSync("dev-server.crt", "utf-8");
-const keyPem = fs.readFileSync("dev-server.key", "utf-8");
+const certPem = fs.readFileSync("src/certs/dev-server.crt", "utf-8");
+const keyPem = fs.readFileSync("src/certs/dev-server.key", "utf-8");
 
 export const newPlayerSessions: Set<Session> = new Set();
 

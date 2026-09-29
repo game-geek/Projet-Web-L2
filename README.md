@@ -24,7 +24,7 @@ bun dev
 
 ### Important Notices
 
-Though for development purposes you will need to add the certificate found at _/game-server/dev-root-ca.cert_ to your browser of choice.
+Though for development purposes you will need to add the certificate found at _/game-server/src/certs/dev-root-ca.cert_ to your browser of choice.
 For Brave on linux (kubuntu): see _game-server/Certificates.md_
 
 ### Présentation

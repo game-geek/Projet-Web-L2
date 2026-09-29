@@ -1,4 +1,5 @@
-import { ServerStreamtype } from "../../../game-client/src/serverCommunication";
+//import { ServerStreamtype } from "../../../game-client/src/serverCommunication";
+import { ServerStreamtype } from "../buildings/buildingsSnapshotBuilder";
 import Player from "../Player";
 import {
   AnyServerEntity,
